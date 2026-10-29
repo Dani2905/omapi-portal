@@ -2,49 +2,102 @@
 import React, { useState, useEffect } from 'react';
 import { Formation } from '../../types';
 import { XMarkIcon, AcademicCapIcon, FolderIcon, ClockIcon, MapPinIcon, CalendarIcon, DocumentTextIcon, ExclamationCircleIcon, SwatchIcon, ArrowUpTrayIcon } from './AdminIcons';
+import { isSupportedFormationDocument, MAX_FORMATION_DOCUMENT_BYTES, normalizeFormationDraft, validateFormationDraft } from '../../utils/formationLogic';
 
 interface FormationFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (formation: Partial<Formation>) => void;
+  onSave: (formation: Partial<Formation>) => void | boolean | Promise<void | boolean>;
   initialData: Partial<Formation>;
 }
 
 const FormationFormModal: React.FC<FormationFormModalProps> = ({ isOpen, onClose, onSave, initialData }) => {
   const [formData, setFormData] = useState<Partial<Formation>>({});
   const [fileName, setFileName] = useState<string>('');
+  const [isReadingFile, setIsReadingFile] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<{ title?: string; category?: string; form?: string }>({});
 
   useEffect(() => {
-    if (isOpen) {
-      setFormData(initialData);
-      if (initialData.fileUrl && initialData.fileUrl.length > 20) {
-          setFileName(initialData.fileName || 'Fichier joint existant');
-      } else {
-          setFileName('');
-      }
-    }
-  }, [isOpen, initialData]);
+    if (!isOpen) return;
+    setFormData({ ...initialData });
+    setFileName(initialData.fileUrl ? (initialData.fileName || 'Fichier joint existant') : '');
+    setIsReadingFile(false);
+    setIsSubmitting(false);
+    setFieldErrors({});
+  }, [isOpen]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setFileName(file.name);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData({ ...formData, fileUrl: reader.result as string, fileName: file.name });
-      };
-      reader.readAsDataURL(file);
+    e.target.value = '';
+    if (!file) return;
+
+    if (!isSupportedFormationDocument(file)) {
+      setFieldErrors((errors) => ({ ...errors, form: 'Type de fichier refusé. Choisissez uniquement un fichier PDF ou DOCX.' }));
+      return;
     }
+    if (file.size === 0) {
+      setFieldErrors((errors) => ({ ...errors, form: 'Le fichier choisi est vide. Sélectionnez un document valide.' }));
+      return;
+    }
+    if (file.size > MAX_FORMATION_DOCUMENT_BYTES) {
+      setFieldErrors((errors) => ({ ...errors, form: 'Le fichier dépasse 2 Mo. Réduisez sa taille avant de le joindre (stockage local de démonstration).' }));
+      return;
+    }
+
+    setFieldErrors((errors) => ({ ...errors, form: undefined }));
+    setIsReadingFile(true);
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') {
+        setFieldErrors((errors) => ({ ...errors, form: 'Le document n’a pas pu être lu. Réessayez avec un autre fichier.' }));
+        setIsReadingFile(false);
+        return;
+      }
+      setFormData((previous) => ({ ...previous, fileUrl: reader.result as string, fileName: file.name }));
+      setFileName(file.name);
+      setIsReadingFile(false);
+    };
+    reader.onerror = () => {
+      setFieldErrors((errors) => ({ ...errors, form: 'La lecture du document a échoué. Vérifiez le fichier puis réessayez.' }));
+      setIsReadingFile(false);
+    };
+    reader.onabort = () => {
+      setFieldErrors((errors) => ({ ...errors, form: 'La lecture du document a été interrompue. Vous pouvez réessayer.' }));
+      setIsReadingFile(false);
+    };
+    reader.readAsDataURL(file);
   };
 
   const removeFile = () => {
-      setFileName('');
-      setFormData({ ...formData, fileUrl: undefined, fileName: undefined });
+    setFileName('');
+    setFormData((previous) => ({ ...previous, fileUrl: undefined, fileName: undefined }));
+    setFieldErrors((errors) => ({ ...errors, form: undefined }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    if (isSubmitting || isReadingFile) return;
+
+    const normalizedData = normalizeFormationDraft(formData);
+    const errors = validateFormationDraft(normalizedData);
+    if (Object.values(errors).some(Boolean)) {
+      setFieldErrors(errors);
+      return;
+    }
+
+    setFieldErrors({});
+    setIsSubmitting(true);
+    try {
+      const saved = await onSave(normalizedData);
+      if (saved === false) {
+        setFieldErrors({ form: 'La formation n’a pas été enregistrée. Vos données restent dans ce formulaire ; vérifiez le message puis réessayez.' });
+      }
+    } catch (error) {
+      setFieldErrors({ form: error instanceof Error ? error.message : 'Une erreur est survenue pendant l’enregistrement. Vos données restent dans ce formulaire.' });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -64,39 +117,52 @@ const FormationFormModal: React.FC<FormationFormModalProps> = ({ isOpen, onClose
             
             <form onSubmit={handleSubmit} className="p-6 space-y-5">
                 
+                {fieldErrors.form && (
+                    <p role="alert" className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 text-xs">{fieldErrors.form}</p>
+                )}
+
                 <div className="grid grid-cols-2 gap-4">
                     <div className="col-span-2">
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Titre de la formation</label>
+                        <label htmlFor="formation-title" className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Titre de la formation</label>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                 <AcademicCapIcon className="h-4 w-4 text-slate-400" />
                             </div>
-                            <input 
-                                type="text" 
+                            <input
+                                id="formation-title"
+                                type="text"
                                 required
+                                maxLength={120}
+                                autoComplete="off"
                                 className="w-full pl-10 px-3 py-2 border border-slate-200 text-sm focus:border-slate-900 outline-none text-slate-700 bg-slate-50/50"
                                 value={formData.title || ''}
-                                onChange={e => setFormData({...formData, title: e.target.value})}
-                                placeholder="Ex: Stratégies de protection PI"
+                                onChange={(e) => { setFormData((previous) => ({ ...previous, title: e.target.value })); setFieldErrors((errors) => ({ ...errors, title: undefined })); }}
+                                placeholder="Ex. : Stratégies de protection PI"
+                                aria-invalid={Boolean(fieldErrors.title)}
+                                aria-describedby={fieldErrors.title ? 'formation-title-error' : undefined}
                             />
+                            {fieldErrors.title && <p id="formation-title-error" role="alert" className="text-[11px] text-red-600 mt-1">{fieldErrors.title}</p>}
                         </div>
                     </div>
 
                     <div className="col-span-2 md:col-span-1">
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Catégorie</label>
+                        <label htmlFor="formation-category" className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Catégorie</label>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                 <FolderIcon className="h-4 w-4 text-slate-400" />
                             </div>
-                            <select 
+                            <select
+                                id="formation-category"
                                 required
+                                aria-invalid={Boolean(fieldErrors.category)}
                                 className="w-full pl-10 px-3 py-2 border border-slate-200 text-sm focus:border-slate-900 outline-none appearance-none text-slate-700 bg-slate-50/50"
                                 value={formData.category || 'Base'}
-                                onChange={e => setFormData({...formData, category: e.target.value as 'Base' | 'Avancee'})}
+                                onChange={(e) => { setFormData((previous) => ({ ...previous, category: e.target.value as 'Base' | 'Avancee' })); setFieldErrors((errors) => ({ ...errors, category: undefined })); }}
                             >
                                 <option value="Base">Formation de base</option>
                                 <option value="Avancee">Formation avancée</option>
                             </select>
+                            {fieldErrors.category && <p role="alert" className="text-[11px] text-red-600 mt-1">{fieldErrors.category}</p>}
                         </div>
                     </div>
 
@@ -109,7 +175,7 @@ const FormationFormModal: React.FC<FormationFormModalProps> = ({ isOpen, onClose
                             <select 
                                 className="w-full pl-10 px-3 py-2 border border-slate-200 text-sm focus:border-slate-900 outline-none appearance-none text-slate-700 bg-slate-50/50"
                                 value={formData.colorTheme || 'blue'}
-                                onChange={e => setFormData({...formData, colorTheme: e.target.value as any})}
+                                onChange={(e) => setFormData((previous) => ({ ...previous, colorTheme: e.target.value as Formation['colorTheme'] }))}
                             >
                                 <option value="blue">Bleu (Standard)</option>
                                 <option value="indigo">Indigo (Sérieux)</option>
@@ -132,7 +198,8 @@ const FormationFormModal: React.FC<FormationFormModalProps> = ({ isOpen, onClose
                                 type="text" 
                                 className="w-full pl-10 px-3 py-2 border border-slate-200 text-sm focus:border-slate-900 outline-none text-slate-700 bg-slate-50/50"
                                 value={formData.date || ''}
-                                onChange={e => setFormData({...formData, date: e.target.value})}
+                                maxLength={80}
+                                onChange={(e) => setFormData((previous) => ({ ...previous, date: e.target.value }))}
                                 placeholder="Ex: 15 Avril 2024"
                             />
                         </div>
@@ -148,7 +215,8 @@ const FormationFormModal: React.FC<FormationFormModalProps> = ({ isOpen, onClose
                                 type="text" 
                                 className="w-full pl-10 px-3 py-2 border border-slate-200 text-sm focus:border-slate-900 outline-none text-slate-700 bg-slate-50/50"
                                 value={formData.time || ''}
-                                onChange={e => setFormData({...formData, time: e.target.value})}
+                                maxLength={80}
+                                onChange={(e) => setFormData((previous) => ({ ...previous, time: e.target.value }))}
                                 placeholder="Ex: 09h00 - 12h00"
                             />
                         </div>
@@ -164,7 +232,8 @@ const FormationFormModal: React.FC<FormationFormModalProps> = ({ isOpen, onClose
                                 type="text" 
                                 className="w-full pl-10 px-3 py-2 border border-slate-200 text-sm focus:border-slate-900 outline-none text-slate-700 bg-slate-50/50"
                                 value={formData.location || ''}
-                                onChange={e => setFormData({...formData, location: e.target.value})}
+                                maxLength={150}
+                                onChange={(e) => setFormData((previous) => ({ ...previous, location: e.target.value }))}
                                 placeholder="Ex: Siège OMAPI"
                             />
                         </div>
@@ -177,11 +246,12 @@ const FormationFormModal: React.FC<FormationFormModalProps> = ({ isOpen, onClose
                         <div className="absolute top-3 left-3 pointer-events-none">
                             <DocumentTextIcon className="h-4 w-4 text-slate-400" />
                         </div>
-                        <textarea 
+                        <textarea
+                            maxLength={5000}
                             rows={3}
                             className="w-full pl-10 px-3 py-2 border border-slate-200 text-sm focus:border-slate-900 outline-none resize-none text-slate-700 bg-slate-50/50"
                             value={formData.description || ''}
-                            onChange={e => setFormData({...formData, description: e.target.value})}
+                            onChange={(e) => setFormData((previous) => ({ ...previous, description: e.target.value }))}
                             placeholder="Détails sur le contenu de la formation..."
                         />
                     </div>
@@ -193,11 +263,12 @@ const FormationFormModal: React.FC<FormationFormModalProps> = ({ isOpen, onClose
                         <div className="absolute top-3 left-3 pointer-events-none">
                             <ExclamationCircleIcon className="h-4 w-4 text-slate-400" />
                         </div>
-                        <textarea 
+                        <textarea
+                            maxLength={2000}
                             rows={2}
                             className="w-full pl-10 px-3 py-2 border border-slate-200 text-sm focus:border-slate-900 outline-none resize-none text-slate-700 bg-slate-50/50"
                             value={formData.conditions || ''}
-                            onChange={e => setFormData({...formData, conditions: e.target.value})}
+                            onChange={(e) => setFormData((previous) => ({ ...previous, conditions: e.target.value }))}
                             placeholder="Ex: Ouvert à tous, payant, sur dossier..."
                         />
                     </div>
@@ -209,6 +280,7 @@ const FormationFormModal: React.FC<FormationFormModalProps> = ({ isOpen, onClose
                     
                     <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border border-slate-200 border-dashed hover:bg-slate-50 transition-colors relative group bg-slate-50/30">
                         <div className="space-y-1 text-center">
+                            {isReadingFile && <p role="status" className="text-xs font-bold text-blue-700">Lecture du document en cours…</p>}
                             {fileName ? (
                                 <div className="text-slate-900 flex flex-col items-center">
                                     <DocumentTextIcon className="h-8 w-8 mb-2 text-slate-400" />
@@ -230,7 +302,7 @@ const FormationFormModal: React.FC<FormationFormModalProps> = ({ isOpen, onClose
                                             Télécharger un fichier
                                         </span>
                                     </div>
-                                    <p className="text-[10px] text-slate-400 uppercase tracking-tight mt-1">PDF, DOCX jusqu'à 5MB</p>
+                                    <p className="text-[10px] text-slate-400 uppercase tracking-tight mt-1">PDF ou DOCX · 2 Mo max (stockage local de démonstration)</p>
                                 </>
                             )}
                         </div>
@@ -238,8 +310,11 @@ const FormationFormModal: React.FC<FormationFormModalProps> = ({ isOpen, onClose
                             <input 
                                 id="formation-file-upload" 
                                 name="formation-file-upload" 
-                                type="file" 
-                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
+                                type="file"
+                                accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                disabled={isReadingFile || isSubmitting}
+                                aria-label="Joindre un document PDF ou DOCX"
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                                 onChange={handleFileUpload} 
                             />
                         )}
@@ -247,18 +322,20 @@ const FormationFormModal: React.FC<FormationFormModalProps> = ({ isOpen, onClose
                 </div>
 
                 <div className="pt-4 flex justify-end space-x-3 border-t border-slate-100">
-                    <button 
+                    <button
                         type="button"
                         onClick={onClose}
-                        className="px-4 py-2 text-xs font-bold uppercase tracking-widest text-slate-500 hover:text-slate-900 transition-colors"
+                        disabled={isSubmitting || isReadingFile}
+                        className="px-4 py-2 text-xs font-bold uppercase tracking-widest text-slate-500 hover:text-slate-900 transition-colors disabled:opacity-50"
                     >
                         Annuler
                     </button>
-                    <button 
+                    <button
                         type="submit"
-                        className="px-6 py-2 bg-slate-900 text-white text-xs font-bold uppercase tracking-widest hover:bg-slate-800 transition-colors"
+                        disabled={isSubmitting || isReadingFile}
+                        className="px-6 py-2 bg-slate-900 text-white text-xs font-bold uppercase tracking-widest hover:bg-slate-800 transition-colors disabled:opacity-60"
                     >
-                        Enregistrer
+                        {isSubmitting ? 'Enregistrement…' : 'Enregistrer'}
                     </button>
                 </div>
             </form>

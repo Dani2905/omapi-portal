@@ -1,9 +1,10 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Breadcrumb from '../components/Breadcrumb';
 import { DEFAULT_GOPI, DEFAULT_GOPI_ORDERS } from '../constants';
 import { GopiItem, GopiOrder } from '../types';
 import { useCrud } from '../hooks/useCrud';
+import { GOPI_CATEGORIES, GOPI_PRICE_MGA, hasGopiPdf, normalizeGopiOrder, validateGopiOrder } from '../utils/gopiLogic';
 
 // --- Heroicons ---
 const NewspaperIcon = ({ className }: { className?: string }) => (
@@ -66,23 +67,37 @@ const Gopi: React.FC = () => {
       transactionRef: ''
   });
   const [hasAgreed, setHasAgreed] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
+  const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
 
-  const tabs = [
+  const UNCATEGORIZED_GOPI_TAB = '__gopi_sans_categorie__';
+  const knownTabs = [
     { id: 'Gazette Officielle', label: 'Gazette Officielle (Dépôts)' },
     { id: 'Inscription au Registre', label: 'Inscriptions au Registre' },
     { id: 'Renouvellement', label: 'Renouvellements' },
     { id: 'GOPI spéciale GMD', label: 'GOPI Spéciale (Marques Int.)' },
     { id: 'GOPI spéciale GDM', label: 'GOPI Spéciale (Dessins Int.)' },
   ];
+  // Afficher aussi les catégories inattendues des anciennes données afin qu’aucun numéro ne disparaisse.
+  const hasUncategorizedGopi = gopiList.some((item) => !String(item.category || '').trim());
+  const tabs = [
+    ...knownTabs,
+    ...(hasUncategorizedGopi ? [{ id: UNCATEGORIZED_GOPI_TAB, label: 'Catégorie non définie' }] : []),
+    ...Array.from(new Set(gopiList.map((item) => typeof item.category === 'string' ? item.category.trim() : '').filter(Boolean)))
+      .filter((category) => !GOPI_CATEGORIES.includes(category as typeof GOPI_CATEGORIES[number]))
+      .map((category) => ({ id: category, label: `Autre : ${category}` })),
+  ];
 
-  const filteredGopi = gopiList.filter(gopi => {
-    const matchesSearch = 
-        gopi.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        gopi.date.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (gopi.description && gopi.description.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    const matchesCategory = gopi.category === activeCategory;
-    return matchesSearch && matchesCategory;
+  const normalizedSearch = searchTerm.trim().toLocaleLowerCase('fr');
+  const filteredGopi = gopiList.filter((gopi) => {
+    const searchable = [gopi.title, gopi.date, gopi.description]
+      .filter((value): value is string => typeof value === 'string')
+      .join(' ')
+      .toLocaleLowerCase('fr');
+    const category = String(gopi.category || '').trim();
+    const matchesCategory = activeCategory === UNCATEGORIZED_GOPI_TAB ? !category : category === activeCategory;
+    return searchable.includes(normalizedSearch) && matchesCategory;
   });
 
   const getCategoryBadgeClass = (category: string) => {
@@ -98,40 +113,79 @@ const Gopi: React.FC = () => {
 
   const handleOrderClick = (gopi: GopiItem) => {
       setSelectedGopi(gopi);
+      setOrderForm({ name: '', email: '', phone: '', paymentMethod: 'MVola', transactionRef: '' });
       setHasAgreed(false);
+      setOrderError(null);
+      setOrderSuccess(null);
       setIsModalOpen(true);
   };
 
   const handleCloseModal = () => {
+      if (isSubmittingOrder) return;
       setIsModalOpen(false);
       setOrderForm({ name: '', email: '', phone: '', paymentMethod: 'MVola', transactionRef: '' });
       setSelectedGopi(null);
       setHasAgreed(false);
+      setOrderError(null);
   };
 
   const handleOrderSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      
-      if (!hasAgreed) return;
+      if (isSubmittingOrder) return;
+      if (!hasAgreed) {
+        setOrderError('Veuillez accepter les conditions avant de continuer.');
+        return;
+      }
 
-      const newOrder: GopiOrder = {
+      const currentPublication = selectedGopi
+        ? gopiList.find((item) => String(item.id) === String(selectedGopi.id))
+        : undefined;
+      const normalized = normalizeGopiOrder({
+        customerName: orderForm.name,
+        customerEmail: orderForm.email,
+        customerPhone: orderForm.phone,
+        paymentMethod: orderForm.paymentMethod,
+        transactionRef: orderForm.transactionRef,
+      });
+      const validationError = validateGopiOrder(normalized, currentPublication);
+      if (validationError) {
+        setOrderError(validationError);
+        return;
+      }
+
+      setOrderError(null);
+      setIsSubmittingOrder(true);
+      try {
+        const newOrder: GopiOrder = {
           id: Date.now(),
-          gopiId: selectedGopi!.id,
-          gopiTitle: selectedGopi!.title,
-          customerName: orderForm.name,
-          customerEmail: orderForm.email,
-          customerPhone: orderForm.phone,
-          date: new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }),
+          gopiId: currentPublication!.id,
+          gopiTitle: currentPublication!.title,
+          customerName: normalized.customerName,
+          customerEmail: normalized.customerEmail,
+          customerPhone: normalized.customerPhone,
+          date: new Date().toISOString(),
+          amountMGA: GOPI_PRICE_MGA,
           status: 'En attente',
-          paymentMethod: orderForm.paymentMethod,
-          transactionRef: orderForm.transactionRef
-      };
+          paymentMethod: normalized.paymentMethod,
+          transactionRef: normalized.transactionRef,
+        };
 
-      await saveOrder(newOrder);
+        const saved = await saveOrder(newOrder);
+        if (!saved) {
+          setOrderError('La demande n’a pas pu être enregistrée dans cette démonstration locale. Vos informations restent dans le formulaire ; réessayez.');
+          return;
+        }
 
-      alert(`Merci ${orderForm.name}. Votre demande pour "${selectedGopi?.title}" et votre référence de paiement ont été enregistrées. Nous validerons la transaction sous peu.`);
-      
-      handleCloseModal();
+        setOrderSuccess(`Merci ${normalized.customerName}. Votre demande pour « ${currentPublication!.title} » a été enregistrée dans le stockage local de ce navigateur. Le paiement doit être vérifié par l’OMAPI ; aucun e-mail ni PDF n’est envoyé automatiquement.`);
+        setIsModalOpen(false);
+        setSelectedGopi(null);
+        setOrderForm({ name: '', email: '', phone: '', paymentMethod: 'MVola', transactionRef: '' });
+        setHasAgreed(false);
+      } catch {
+        setOrderError('Une erreur a empêché l’enregistrement. Vos informations restent dans le formulaire ; réessayez.');
+      } finally {
+        setIsSubmittingOrder(false);
+      }
   };
 
   return (
@@ -145,6 +199,8 @@ const Gopi: React.FC = () => {
                 La Gazette Officielle de la Propriété Industrielle (GOPI) recense tous les titres de propriété industrielle délivrés et les actes affectant leur existence.
             </p>
         </div>
+
+        {orderSuccess && <p role="status" className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-900">{orderSuccess}</p>}
 
         {/* Section Recherche */}
         <div className="bg-white rounded-xl shadow-sm p-6 mb-8 border border-gray-100">
@@ -185,7 +241,7 @@ const Gopi: React.FC = () => {
                         <span className={`ml-2 py-0.5 px-2.5 rounded-full text-xs font-medium ${
                             activeCategory === tab.id ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600 group-hover:bg-gray-200'
                         }`}>
-                            {gopiList.filter(g => g.category === tab.id).length}
+                            {gopiList.filter((g) => tab.id === UNCATEGORIZED_GOPI_TAB ? !String(g.category || '').trim() : String(g.category || '').trim() === tab.id).length}
                         </span>
                     </button>
                 ))}
@@ -223,19 +279,22 @@ const Gopi: React.FC = () => {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span className={`px-2 py-1 inline-flex text-xs font-semibold rounded border ${getCategoryBadgeClass(gopi.category)}`}>
-                                            {gopi.category}
+                                            {String(gopi.category || '').trim() || 'Catégorie non définie'}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-center text-gray-700 font-bold">
-                                        10 000 Ar
+{GOPI_PRICE_MGA.toLocaleString('fr-FR')} Ar
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-center">
                                         <button 
+                                            type="button"
                                             onClick={() => handleOrderClick(gopi)}
-                                            className="inline-flex items-center justify-center px-4 py-1.5 bg-primary border border-transparent hover:bg-secondary text-white rounded shadow-sm hover:shadow transition-all text-xs font-bold uppercase tracking-wide"
+                                            disabled={!hasGopiPdf(gopi)}
+                                            title={hasGopiPdf(gopi) ? 'Commander le PDF' : 'Commande indisponible : PDF non joint'}
+                                            className="inline-flex items-center justify-center px-4 py-1.5 bg-primary border border-transparent hover:bg-secondary text-white rounded shadow-sm hover:shadow transition-all text-xs font-bold uppercase tracking-wide disabled:bg-gray-300 disabled:text-gray-600 disabled:cursor-not-allowed disabled:shadow-none"
                                         >
                                             <ShoppingCartIcon className="w-4 h-4 mr-2" />
-                                            Commander
+                                            {hasGopiPdf(gopi) ? 'Commander' : 'PDF indisponible'}
                                         </button>
                                     </td>
                                 </tr>
@@ -259,7 +318,7 @@ const Gopi: React.FC = () => {
         {/* Footer info */}
         <div className="mt-6 text-center text-sm text-gray-500 flex justify-center items-center gap-2">
             <BanknotesIcon className="w-5 h-5 text-gray-400" />
-            <p>Le paiement s'effectue à la commande. Les versions numériques sont envoyées après validation.</p>
+            <p>Cette démonstration enregistre la demande dans ce navigateur uniquement : paiement et envoi du PDF nécessitent un traitement manuel par l’OMAPI.</p>
         </div>
       </div>
 
@@ -269,7 +328,7 @@ const Gopi: React.FC = () => {
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-slideUp max-h-[95vh] overflow-y-auto">
                   <div className="bg-gray-50 px-6 py-4 border-b border-gray-100 flex justify-between items-center sticky top-0 z-10">
                       <h3 className="text-lg font-bold text-gray-800">Commander une publication</h3>
-                      <button onClick={handleCloseModal} className="text-gray-400 hover:text-gray-600">
+                      <button type="button" onClick={handleCloseModal} disabled={isSubmittingOrder} aria-label="Fermer" className="text-gray-400 hover:text-gray-600 disabled:opacity-50">
                           <XMarkIcon className="w-5 h-5" />
                       </button>
                   </div>
@@ -280,7 +339,7 @@ const Gopi: React.FC = () => {
                           <p className="text-lg font-bold text-primary">{selectedGopi.title}</p>
                           <div className="flex justify-between items-center mt-2 text-sm text-gray-600">
                               <span>Date : {selectedGopi.date}</span>
-                              <span className="font-bold text-gray-800">Prix : 10 000 Ar</span>
+                              <span className="font-bold text-gray-800">Prix : {GOPI_PRICE_MGA.toLocaleString('fr-FR')} Ar</span>
                           </div>
                       </div>
 
@@ -289,39 +348,46 @@ const Gopi: React.FC = () => {
                               <label className="block text-sm font-medium text-gray-700 mb-1">Nom complet</label>
                               <input 
                                   type="text" 
-                                  required 
+                                  required
+                                  minLength={2}
+                                  maxLength={120}
+                                  autoComplete="name"
                                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-colors text-gray-800 bg-gray-50 focus:bg-white"
                                   placeholder="Votre nom"
                                   value={orderForm.name}
-                                  onChange={e => setOrderForm({...orderForm, name: e.target.value})}
+                                  onChange={e => { setOrderForm((current) => ({...current, name: e.target.value})); setOrderError(null); }}
                               />
                           </div>
                           <div>
                               <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                               <input 
                                   type="email" 
-                                  required 
+                                  required
+                                  maxLength={254}
+                                  autoComplete="email"
                                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-colors text-gray-800 bg-gray-50 focus:bg-white"
                                   placeholder="votre@email.com"
                                   value={orderForm.email}
-                                  onChange={e => setOrderForm({...orderForm, email: e.target.value})}
+                                  onChange={e => { setOrderForm((current) => ({...current, email: e.target.value})); setOrderError(null); }}
                               />
                           </div>
                           <div>
                               <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
                               <input 
                                   type="tel" 
-                                  required 
+                                  required
+                                  maxLength={30}
+                                  autoComplete="tel"
                                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-colors text-gray-800 bg-gray-50 focus:bg-white"
-                                  placeholder="034..."
+                                  placeholder="034…"
                                   value={orderForm.phone}
-                                  onChange={e => setOrderForm({...orderForm, phone: e.target.value})}
+                                  onChange={e => { setOrderForm((current) => ({...current, phone: e.target.value})); setOrderError(null); }}
                               />
                           </div>
 
                           <div className="pt-2 border-t border-gray-100 mt-2">
                               <p className="text-xs text-gray-500 mb-2 italic">
-                                Veuillez effectuer le paiement au <strong>034 00 000 00 (OMAPI)</strong> et renseigner la référence ci-dessous.
+                                Utilisez uniquement les coordonnées officielles de paiement communiquées par l’OMAPI. Cette démonstration n’encaisse aucun paiement.
                               </p>
                               
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -330,22 +396,28 @@ const Gopi: React.FC = () => {
                                     <select 
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-gray-50 focus:bg-white text-gray-800 transition-colors"
                                         value={orderForm.paymentMethod}
-                                        onChange={e => setOrderForm({...orderForm, paymentMethod: e.target.value})}
+                                        onChange={e => { setOrderForm((current) => ({...current, paymentMethod: e.target.value})); setOrderError(null); }}
                                     >
                                         <option value="MVola">MVola</option>
                                         <option value="Orange Money">Orange Money</option>
                                         <option value="Airtel Money">Airtel Money</option>
                                         <option value="Virement Bancaire">Virement Bancaire</option>
+                                        <option value="Chèque">Chèque certifié</option>
+                                        <option value="Espèces">Espèces (au siège)</option>
                                     </select>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Réf. Transaction</label>
                                     <input 
                                         type="text" 
+                                        required={orderForm.paymentMethod !== 'Espèces' && orderForm.paymentMethod !== 'Chèque'}
+                                        minLength={3}
+                                        maxLength={100}
+                                        autoComplete="off"
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-colors text-gray-800 bg-gray-50 focus:bg-white"
-                                        placeholder="Ex: 123456"
+                                        placeholder="Ex. : référence de transaction"
                                         value={orderForm.transactionRef}
-                                        onChange={e => setOrderForm({...orderForm, transactionRef: e.target.value})}
+                                        onChange={e => { setOrderForm((current) => ({...current, transactionRef: e.target.value})); setOrderError(null); }}
                                     />
                                 </div>
                               </div>
@@ -360,13 +432,13 @@ const Gopi: React.FC = () => {
                           </label>
                           <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-600 h-24 overflow-y-auto leading-relaxed">
                               <p className="font-bold mb-1">1. Tarification</p>
-                              <p className="mb-2">Le prix de la publication est fixé à 10 000 Ariary par numéro. Ce tarif est unique et non négociable.</p>
+                              <p className="mb-2">Le prix de la publication est fixé à {GOPI_PRICE_MGA.toLocaleString('fr-FR')} Ariary par numéro. Ce tarif est unique et non négociable.</p>
                               
                               <p className="font-bold mb-1">2. Modalités de paiement</p>
                               <p className="mb-2">Le paiement doit être effectué intégralement avant l'envoi du fichier. Les modes acceptés sont : MVola, Orange Money, Airtel Money, Virement bancaire ou Espèces au siège de l'OMAPI.</p>
                               
                               <p className="font-bold mb-1">3. Livraison</p>
-                              <p className="mb-2">Le fichier numérique (PDF) sera envoyé à l'adresse email fournie dans ce formulaire une fois la transaction validée par nos services.</p>
+                              <p className="mb-2">Après vérification du paiement, l’OMAPI organisera la remise du fichier PDF. Cette démonstration ne déclenche pas d’envoi automatique par e-mail.</p>
                               
                               <p className="font-bold mb-1">4. Usage et Droits</p>
                               <p>Le document fourni est destiné à un usage personnel ou professionnel interne. Toute rediffusion, revente ou publication non autorisée est strictement interdite et passible de poursuites.</p>
@@ -378,6 +450,7 @@ const Gopi: React.FC = () => {
                           <label className="flex items-start space-x-3 cursor-pointer group">
                               <input 
                                   type="checkbox" 
+                                  required
                                   className="form-checkbox h-5 w-5 text-primary rounded border-gray-300 focus:ring-primary mt-0.5 cursor-pointer"
                                   checked={hasAgreed}
                                   onChange={(e) => setHasAgreed(e.target.checked)}
@@ -388,9 +461,12 @@ const Gopi: React.FC = () => {
                           </label>
                       </div>
 
+                      {orderError && <p role="alert" className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{orderError}</p>}
+
                       <div className="flex space-x-3">
                           <button 
                               type="button" 
+                              disabled={isSubmittingOrder}
                               onClick={handleCloseModal}
                               className="flex-1 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
                           >
@@ -398,14 +474,14 @@ const Gopi: React.FC = () => {
                           </button>
                           <button 
                               type="submit"
-                              disabled={!hasAgreed}
+                              disabled={!hasAgreed || isSubmittingOrder}
                               className={`flex-1 py-2.5 rounded-lg font-bold shadow-md transition-all ${
                                   hasAgreed 
                                   ? 'bg-primary hover:bg-secondary text-white transform hover:-translate-y-0.5' 
                                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                               }`}
                           >
-                              Valider la commande
+                              {isSubmittingOrder ? 'Enregistrement…' : 'Enregistrer la demande'}
                           </button>
                       </div>
                   </form>

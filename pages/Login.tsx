@@ -2,6 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { DEFAULT_USERS } from '../data/mocks/users';
+import type { User } from '../types';
+import {
+  SUPER_ADMIN_EMAILS,
+  hasPasswordCredential,
+  normalizeEmail,
+  verifyPasswordCredential,
+} from '../utils/userAccounts';
 
 // --- Heroicons Local Components for Login ---
 const LockClosedIcon = ({ className }: { className?: string }) => (
@@ -68,22 +75,32 @@ const Login: React.FC = () => {
     setError('');
   };
 
-  const getStoredUsers = () => {
+  const getStoredUsers = (): User[] => {
     try {
       const saved = localStorage.getItem('omapi_users');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        // Une liste vide enregistrée signifie que les comptes ont été
+        // supprimés : ne pas restaurer silencieusement les défauts.
+        if (Array.isArray(parsed)) return parsed as User[];
       }
     } catch (e) {}
     return DEFAULT_USERS;
+  };
+
+  const startSession = (user: { id: number | string; name: string; email: string; role: string }) => {
+    localStorage.setItem('omapi_user_role', user.role || 'Éditeur');
+    localStorage.setItem('omapi_user_name', user.name || 'Utilisateur');
+    localStorage.setItem('omapi_user_id', String(user.id));
+    localStorage.setItem('omapi_user_email', user.email);
+    navigate('/admin');
   };
 
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     setError('');
     localStorage.setItem('omapi_user_role', 'Admin');
-    localStorage.setItem('omapi_user_name', 'Daniel Razanajaona');
+    localStorage.setItem('omapi_user_name', DEFAULT_USERS.find((user) => String(user.id) === '1')?.name || 'Administrateur');
     localStorage.setItem('omapi_user_id', '1');
     localStorage.setItem('omapi_user_email', 'daniel.razanajaona@gmail.com');
     navigate('/admin');
@@ -94,38 +111,96 @@ const Login: React.FC = () => {
     setIsLoading(true);
     setError('');
 
-    const normalizedEmail = formData.email.trim().toLowerCase();
-
-    // Super Admin Fallback / Bypass
-    if (normalizedEmail === 'daniel.razanajaona@gmail.com' || normalizedEmail === 'admin@omapi.mg') {
-      localStorage.setItem('omapi_user_role', 'Admin');
-      localStorage.setItem('omapi_user_name', 'Daniel Razanajaona');
-      localStorage.setItem('omapi_user_id', '1');
-      localStorage.setItem('omapi_user_email', normalizedEmail);
-      navigate('/admin');
-      return;
-    }
-
+    const normalizedEmail = normalizeEmail(formData.email);
     const users = getStoredUsers();
-    const matchedUser = users.find((u: any) => String(u.email).toLowerCase() === normalizedEmail);
+    const matchedUser = users.find(
+      (user) => normalizeEmail(user.email) === normalizedEmail,
+    );
 
-    if (!matchedUser) {
-      setError("Aucun compte administrateur ou éditeur trouvé avec cet email.");
-      setIsLoading(false);
+    if (matchedUser) {
+      if (matchedUser.status === 'Inactif') {
+        setError("Votre compte a été désactivé.");
+        setIsLoading(false);
+        return;
+      }
+
+      // Les comptes créés avec un mot de passe doivent le respecter.
+      // Les anciens comptes sans empreinte conservent le comportement
+      // historique du prototype (à supprimer avec le vrai backend).
+      if (hasPasswordCredential(matchedUser)) {
+        try {
+          const passwordIsValid = await verifyPasswordCredential(
+            formData.password,
+            matchedUser,
+          );
+
+          if (!passwordIsValid) {
+            setError("Mot de passe incorrect.");
+            setIsLoading(false);
+            return;
+          }
+        } catch {
+          setError("La vérification du mot de passe est impossible dans ce navigateur.");
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      startSession({
+        id: matchedUser.id,
+        name: matchedUser.name || 'Utilisateur',
+        email: normalizeEmail(matchedUser.email),
+        role: matchedUser.role || 'Éditeur',
+      });
       return;
     }
 
-    if (matchedUser.status === 'Inactif') {
-      setError("Votre compte a été désactivé.");
-      setIsLoading(false);
+    // Accès de secours du prototype, uniquement si le compte n'existe
+    // pas dans la liste enregistrée (par exemple alias une adresse de secours).
+    // Si le compte administrateur principal a défini un mot de passe,
+    // l'alias doit le respecter aussi : sinon un changement de mot de
+    // passe depuis le profil serait sans effet sur cette entrée.
+    if (SUPER_ADMIN_EMAILS.includes(normalizedEmail as typeof SUPER_ADMIN_EMAILS[number])) {
+      const principalAdmin = users.find(
+        (user) => String(user.id) === '1' || normalizeEmail(user.email) === SUPER_ADMIN_EMAILS[0],
+      );
+
+      if (principalAdmin?.status === 'Inactif') {
+        setError("Votre compte a été désactivé.");
+        setIsLoading(false);
+        return;
+      }
+
+      if (principalAdmin && hasPasswordCredential(principalAdmin)) {
+        try {
+          const passwordIsValid = await verifyPasswordCredential(
+            formData.password,
+            principalAdmin,
+          );
+
+          if (!passwordIsValid) {
+            setError("Mot de passe incorrect.");
+            setIsLoading(false);
+            return;
+          }
+        } catch {
+          setError("La vérification du mot de passe est impossible dans ce navigateur.");
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      startSession({
+        id: principalAdmin?.id ?? 1,
+        name: principalAdmin?.name || DEFAULT_USERS.find((user) => String(user.id) === '1')?.name || 'Administrateur',
+        email: normalizedEmail,
+        role: 'Admin',
+      });
       return;
     }
 
-    localStorage.setItem('omapi_user_role', matchedUser.role || 'Éditeur');
-    localStorage.setItem('omapi_user_name', matchedUser.name || 'Utilisateur');
-    localStorage.setItem('omapi_user_id', String(matchedUser.id));
-    localStorage.setItem('omapi_user_email', matchedUser.email);
-    navigate('/admin');
+    setError("Aucun compte administrateur ou éditeur trouvé avec cet email.");
+    setIsLoading(false);
   };
 
   return (
@@ -303,9 +378,13 @@ const Login: React.FC = () => {
                     </div>
 
                     <div className="text-sm">
-                        <a href="#" className="font-semibold text-primary hover:text-blue-700 transition-colors">
+                        <button
+                            type="button"
+                            onClick={() => setError("La réinitialisation par e-mail n'est pas encore disponible dans ce prototype. Demandez à un administrateur de réinitialiser votre mot de passe depuis le module Utilisateurs.")}
+                            className="font-semibold text-primary hover:text-blue-700 transition-colors"
+                        >
                             Mot de passe oublié ?
-                        </a>
+                        </button>
                     </div>
                 </div>
 

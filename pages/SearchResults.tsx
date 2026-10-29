@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { useCrud } from '../hooks/useCrud';
+import { getLibraryPlainText } from '../utils/documentLibraryLogic';
 import { NewsItem, LegislationItem, Formulaire, Guide, Formation, Event, GopiItem } from '../types';
 import Breadcrumb from '../components/Breadcrumb';
 import { LATEST_NEWS } from '../data/mocks/news';
@@ -40,14 +41,12 @@ const SearchResults: React.FC = () => {
       item.description.toLowerCase().includes(lowerQuery)
     ).map(item => ({ ...item, resultType: 'Législation', link: '/legislation' }));
 
-    const matchedForms = forms.filter(item => 
-      item.title.toLowerCase().includes(lowerQuery) || 
-      item.description.toLowerCase().includes(lowerQuery)
+    const matchedForms = forms.filter(item =>
+      [item.title, getLibraryPlainText(item.description)].some((value) => String(value || '').toLocaleLowerCase('fr').includes(lowerQuery))
     ).map(item => ({ ...item, resultType: 'Formulaire', link: '/formulaires' }));
 
-    const matchedGuides = guides.filter(item => 
-      item.title.toLowerCase().includes(lowerQuery) || 
-      item.description.toLowerCase().includes(lowerQuery)
+    const matchedGuides = guides.filter(item =>
+      [item.title, getLibraryPlainText(item.description)].some((value) => String(value || '').toLocaleLowerCase('fr').includes(lowerQuery))
     ).map(item => ({ ...item, resultType: 'Guide', link: '/guides' }));
 
     const matchedFormations = formations.filter(item => 

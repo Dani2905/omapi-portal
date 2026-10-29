@@ -8,7 +8,12 @@
     "dev": "tsx server.ts",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test:users": "tsx tests/userAccounts.test.ts",
+    "test:notifications": "tsx tests/notificationMessages.test.ts",
+    "test:formations": "tsx tests/formations.test.ts",
+    "test:gopi": "tsx tests/gopi.test.ts",
+    "test:documents": "tsx tests/documentLibrary.test.ts"
   },
   "dependencies": {
     "cors": "^2.8.6",

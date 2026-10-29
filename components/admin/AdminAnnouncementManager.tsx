@@ -5,21 +5,33 @@ import { MegaphoneIcon, SpeakerWaveIcon, PlusIcon, TrashIcon, CheckIcon } from '
 
 interface AdminAnnouncementManagerProps {
   announcements: Announcement[];
-  onSave: (data: Partial<Announcement>) => void;
+  onSave: (data: Partial<Announcement>) => void | boolean | Promise<void | boolean>;
   onDelete: (id: number) => void;
 }
 
 const AdminAnnouncementManager: React.FC<AdminAnnouncementManagerProps> = ({ announcements, onSave, onDelete }) => {
   const [newMessage, setNewMessage] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  const handleAdd = (e: React.FormEvent) => {
+  const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newMessage.trim()) {
-      onSave({
-        text: newMessage,
-        isActive: true
-      });
-      setNewMessage('');
+    const text = newMessage.trim();
+    if (!text || isSaving) return;
+
+    setIsSaving(true);
+    try {
+      const saved = await onSave({ text, isActive: true });
+      // En cas d’échec localStorage, conserver le texte saisi pour permettre
+      // une nouvelle tentative au lieu de le vider malgré la notification.
+      if (saved !== false) {
+        setNewMessage('');
+        setSaveError(null);
+      }
+    } catch {
+      setSaveError("Le message n'a pas été enregistré. Votre saisie est conservée ; réessayez.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -61,23 +73,24 @@ const AdminAnnouncementManager: React.FC<AdminAnnouncementManagerProps> = ({ ann
                             type="text"
                             className="w-full pl-9 px-3 py-2 border border-slate-200 rounded-sm text-[11px] focus:border-blue-500 outline-none text-slate-700 bg-white placeholder-slate-400 font-bold uppercase tracking-tight"
                             value={newMessage}
-                            onChange={(e) => setNewMessage(e.target.value)}
+                            onChange={(e) => { setNewMessage(e.target.value); setSaveError(null); }}
                             placeholder="EX: FERMETURE EXCEPTIONNELLE LE..."
                         />
                     </div>
                     <button 
                         type="submit"
-                        disabled={!newMessage.trim()}
+                        disabled={!newMessage.trim() || isSaving}
                         className={`px-4 py-2 rounded-sm text-[10px] font-bold uppercase tracking-widest flex items-center border ${
-                            newMessage.trim() 
-                            ? 'bg-slate-900 hover:bg-slate-800 text-white border-slate-900' 
+                            newMessage.trim() && !isSaving
+                            ? 'bg-slate-900 hover:bg-slate-800 text-white border-slate-900'
                             : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
                         }`}
                     >
                         <PlusIcon className="w-4 h-4 mr-2" />
-                        Ajouter
+                        {isSaving ? 'Enregistrement…' : 'Ajouter'}
                     </button>
                 </div>
+                {saveError && <p role="alert" className="text-xs text-red-700 mt-2">{saveError}</p>}
             </form>
 
             {/* Liste des annonces */}

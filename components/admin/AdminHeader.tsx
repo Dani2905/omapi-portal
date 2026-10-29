@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { BellIcon, CheckIcon, ShoppingCartIcon, UserIcon, InformationCircleIcon } from './AdminIcons';
 import { SystemNotification } from '../../types';
+import { formatNotificationTime } from '../../utils/notificationMessages';
 
 interface AdminHeaderProps {
   activeTab: string;
@@ -27,11 +28,18 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
         setIsNotificationsOpen(false);
       }
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (!isNotificationsOpen) return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsNotificationsOpen(false);
     };
-  }, [dropdownRef]);
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isNotificationsOpen]);
 
   const getTitle = () => {
     switch (activeTab) {
@@ -87,13 +95,19 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
       <div className="flex items-center space-x-5">
         {/* Notifications Bell */}
         <div className="relative" ref={dropdownRef}>
-            <button 
+            <button
+                type="button"
+                aria-label={unreadCount > 0 ? `Notifications : ${unreadCount} non lue${unreadCount > 1 ? 's' : ''}` : 'Notifications : aucune nouvelle'}
+                aria-expanded={isNotificationsOpen}
+                aria-haspopup="true"
                 onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-full focus:outline-none relative transition-colors"
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 relative transition-colors"
             >
                 <BellIcon className="w-5 h-5" />
                 {unreadCount > 0 && (
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 border-2 border-white rounded-full"></span>
+                    <span className="absolute -top-0.5 -right-1 min-w-4 h-4 px-1 bg-red-600 text-white text-[9px] leading-4 text-center font-bold border border-white rounded-full">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
                 )}
             </button>
 
@@ -101,7 +115,9 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
             {isNotificationsOpen && (
                 <div className="absolute right-0 mt-3 w-80 bg-white shadow-xl border border-gray-100 rounded-2xl overflow-hidden z-50">
                     <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                        <span className="text-sm font-semibold text-gray-900">Notifications</span>
+                        <span className="text-sm font-semibold text-gray-900">
+                          Notifications{unreadCount > 0 ? ` (${unreadCount} non lue${unreadCount > 1 ? 's' : ''})` : ''}
+                        </span>
                         {unreadCount > 0 && onMarkAllAsRead && (
                             <button 
                                 onClick={onMarkAllAsRead}
@@ -115,27 +131,32 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
                     <div className="max-h-80 overflow-y-auto custom-scrollbar">
                         {systemNotifications.length > 0 ? (
                             systemNotifications.map((notif) => (
-                                <div 
-                                    key={notif.id} 
-                                    onClick={() => onMarkAsRead && onMarkAsRead(notif.id)}
-                                    className={`p-4 border-b border-gray-50 hover:bg-gray-50 cursor-pointer flex items-start gap-3 transition-colors ${notif.read ? 'opacity-60' : 'bg-white'}`}
+                                <button
+                                    type="button"
+                                    key={notif.id}
+                                    disabled={notif.read}
+                                    aria-label={`${notif.read ? 'Notification déjà lue' : 'Marquer comme lue'} : ${notif.title}. ${notif.message}`}
+                                    onClick={() => onMarkAsRead?.(notif.id)}
+                                    className={`w-full text-left p-4 border-b border-gray-50 flex items-start gap-3 transition-colors ${notif.read ? 'opacity-60 cursor-default' : 'bg-white hover:bg-gray-50 cursor-pointer focus:outline-none focus:bg-blue-50'}`}
                                 >
-                                    <div className={`p-2 rounded-xl flex-shrink-0 ${getNotificationBg(notif.type)}`}>
+                                    <div className={`p-2 rounded-xl flex-shrink-0 ${getNotificationBg(notif.type)}`} aria-hidden="true">
                                         {getNotificationIcon(notif.type)}
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className={`text-sm ${notif.read ? 'text-gray-600 font-medium' : 'text-gray-900 font-semibold'}`}>
                                             {notif.title}
                                         </p>
-                                        <p className="text-xs text-gray-500 truncate mt-0.5">
+                                        <p className="text-xs text-gray-500 whitespace-normal break-words leading-relaxed mt-0.5">
                                             {notif.message}
                                         </p>
-                                        <p className="text-[10px] text-gray-400 mt-1.5 font-medium">{notif.time}</p>
+                                        <p className="text-[10px] text-gray-400 mt-1.5 font-medium">
+                                          {formatNotificationTime(notif.time)}
+                                        </p>
                                     </div>
                                     {!notif.read && (
-                                        <div className="w-2 h-2 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
+                                        <span className="mt-2 flex-shrink-0 text-[9px] uppercase tracking-wider font-bold text-blue-700">Nouveau</span>
                                     )}
-                                </div>
+                                </button>
                             ))
                         ) : (
                             <div className="p-8 text-center text-gray-400 text-sm font-medium">

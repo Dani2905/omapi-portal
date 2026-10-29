@@ -23,9 +23,11 @@ interface DashboardContentProps {
   userRole: string;
   data: any; 
   openModal: (type: any, data?: any) => void;
+  currentUserId?: number | string;
+  onDeleteUser: (id: number | string) => Promise<boolean | void> | boolean | void;
 }
 
-const DashboardContent: React.FC<DashboardContentProps> = ({ activeTab, setActiveTab, userRole, data, openModal }) => {
+const DashboardContent: React.FC<DashboardContentProps> = ({ activeTab, setActiveTab, userRole, data, openModal, currentUserId, onDeleteUser }) => {
   switch (activeTab) {
     case 'overview':
       return <AdminOverview data={data} openModal={openModal} setActiveTab={setActiveTab} />;
@@ -119,10 +121,10 @@ const DashboardContent: React.FC<DashboardContentProps> = ({ activeTab, setActiv
         <AdminGopiManager
           gopiItems={data.gopiItems}
           gopiOrders={data.gopiOrders}
-          onAdd={() => openModal('gopi', { title: '', date: '', description: '', fileUrl: '#' })}
+          onAdd={() => openModal('gopi', { title: '', date: '', category: 'Gazette Officielle', description: '', fileUrl: '', fileName: '' })}
           onEdit={(item) => openModal('gopi', item)}
           onDelete={data.deleteGopi}
-          onUpdateOrder={data.saveGopiOrder}
+          onUpdateOrder={data.updateGopiOrder}
           onDeleteOrder={data.deleteGopiOrder}
         />
       );
@@ -140,10 +142,10 @@ const DashboardContent: React.FC<DashboardContentProps> = ({ activeTab, setActiv
         <AdminFormsManager
           forms={data.forms}
           guides={data.guides}
-          onAddForm={() => openModal('form', { title: '', description: '', category: 'Autres', fileUrl: '#', fileName: '' })}
+          onAddForm={() => openModal('form', { title: '', description: '', category: 'Autres', fileUrl: '', fileName: '' })}
           onEditForm={(item) => openModal('form', item)}
           onDeleteForm={data.deleteForm}
-          onAddGuide={() => openModal('guide', { title: '', description: '', iconName: 'book', points: [], colorTheme: 'blue', fileUrl: '#' })}
+          onAddGuide={() => openModal('guide', { title: '', description: '', iconName: 'book', points: [], colorTheme: 'blue', fileUrl: '', fileName: '' })}
           onEditGuide={(item) => openModal('guide', item)}
           onDeleteGuide={data.deleteGuide}
         />
@@ -163,9 +165,10 @@ const DashboardContent: React.FC<DashboardContentProps> = ({ activeTab, setActiv
       return userRole === 'Admin' ? (
         <AdminUsersManager
           users={data.users}
+          currentUserId={currentUserId}
           onAdd={() => openModal('user', { name: '', email: '', role: 'Éditeur', status: 'Actif' })}
           onEdit={(item) => openModal('user', item)}
-          onDelete={data.deleteUser}
+          onDelete={onDeleteUser}
         />
       ) : (
         <div className="flex flex-col items-center justify-center h-[60vh] text-center">

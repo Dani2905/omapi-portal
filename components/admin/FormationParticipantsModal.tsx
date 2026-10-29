@@ -8,15 +8,21 @@ interface FormationParticipantsModalProps {
   onClose: () => void;
   formation: Formation | null;
   registrations: FormationRegistration[];
-  onDeleteRegistration: (id: number) => void;
+  onRequestDeleteRegistration: (registration: FormationRegistration) => void;
 }
 
 const FormationParticipantsModal: React.FC<FormationParticipantsModalProps> = ({ 
-    isOpen, onClose, formation, registrations, onDeleteRegistration 
+    isOpen, onClose, formation, registrations, onRequestDeleteRegistration
 }) => {
   if (!isOpen || !formation) return null;
 
-  const formationRegistrations = registrations.filter(r => r.formationId === formation.id);
+  const formationRegistrations = registrations.filter((registration) => String(registration.formationId) === String(formation.id));
+  const formatRegistrationDate = (value: string) => {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime())
+          ? (value || 'Date inconnue')
+          : new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }).format(parsed);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto animate-fadeIn">
@@ -61,9 +67,9 @@ const FormationParticipantsModal: React.FC<FormationParticipantsModalProps> = ({
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center">
                                             <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xs mr-3 uppercase">
-                                                {reg.name.charAt(0)}
+                                                {reg.name?.charAt(0) || '?'}
                                             </div>
-                                            <div className="text-sm font-medium text-gray-900">{reg.name}</div>
+                                            <div className="text-sm font-medium text-gray-900">{reg.name || 'Participant sans nom'}</div>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
@@ -91,15 +97,13 @@ const FormationParticipantsModal: React.FC<FormationParticipantsModalProps> = ({
                                         )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {reg.registrationDate}
+                                        {formatRegistrationDate(reg.registrationDate)}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                        <button 
-                                            onClick={() => {
-                                                if(window.confirm(`Voulez-vous supprimer l'inscription de ${reg.name} ?`)) {
-                                                    onDeleteRegistration(reg.id);
-                                                }
-                                            }}
+                                        <button
+                                            type="button"
+                                            aria-label={`Supprimer l’inscription de ${reg.name || reg.email}`}
+                                            onClick={() => onRequestDeleteRegistration(reg)}
                                             className="text-red-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-full"
                                             title="Supprimer l'inscription"
                                         >

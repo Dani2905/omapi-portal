@@ -58,7 +58,7 @@ export interface Formulaire {
   title: string;
   description: string;
   category: 'Marques' | 'Brevets' | 'Dessins' | 'Autres';
-  fileUrl: string; // Lien vers le fichier ou dataURL
+  fileUrl?: string; // Lien HTTPS, chemin local ou dataURL autorisé
   fileName?: string;
 }
 
@@ -69,7 +69,8 @@ export interface Guide {
   iconName: string; // 'tag', 'bulb', 'swatch', 'book', 'globe', 'banknotes'
   points: string[]; // Liste des points clés
   colorTheme: 'blue' | 'amber' | 'purple' | 'emerald' | 'orange' | 'gray';
-  fileUrl: string;
+  fileUrl?: string;
+  fileName?: string;
 }
 
 export interface LegislationItem {
@@ -86,9 +87,10 @@ export interface GopiItem {
   id: number;
   title: string; // Ex: GOPI n° 500
   date: string; // Ex: Janvier 2024
-  category: string; // 'Brevets', 'Marques', 'Dessins', 'Toutes'
+  category: string; // Catégorie GOPI connue ou valeur legacy à réparer
   description?: string;
-  fileUrl: string;
+  fileUrl?: string;
+  fileName?: string;
   coverImage?: string; // Optionnel : image de couverture de la gazette
 }
 
@@ -100,9 +102,12 @@ export interface GopiOrder {
   customerEmail: string;
   customerPhone: string;
   date: string;
-  status: 'En attente' | 'Envoyé' | 'Annulé';
+  amountMGA?: number;
+  status: 'En attente' | 'Paiement confirmé' | 'Envoyé' | 'Annulé';
   transactionRef?: string; // Numéro de transaction (Mobile money / Banque)
   paymentMethod?: string; // MVola, Orange Money, Virement, Espèces
+  paymentConfirmedAt?: string;
+  sentAt?: string;
 }
 
 export interface Formation {
@@ -160,6 +165,14 @@ export interface User {
   email: string;
   role: 'Admin' | 'Éditeur';
   status: 'Actif' | 'Inactif';
+  /**
+   * Empreinte du mot de passe du prototype (SHA-256 salé, calculée
+   * dans le navigateur). Ne jamais stocker le mot de passe en clair.
+   * En production, cette vérification devra être faite côté serveur.
+   */
+  passwordSalt?: string;
+  passwordHash?: string;
+  passwordUpdatedAt?: string;
 }
 
 export interface JobOffer {
@@ -222,6 +235,8 @@ export interface ActivityLog {
   id: number;
   userId?: string;
   userName?: string;
+  entityKey?: string;
+  entityId?: number | string;
   action: string;
   details: string;
   timestamp: string;

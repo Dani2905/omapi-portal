@@ -6,6 +6,7 @@ import Breadcrumb from '../components/Breadcrumb';
 import { DEFAULT_FORMATIONS, DEFAULT_FORMATION_REGISTRATIONS } from '../constants';
 import { Formation, FormationRegistration } from '../types';
 import { useCrud } from '../hooks/useCrud';
+import { normalizeFormationRegistration, validateFormationRegistration } from '../utils/formationLogic';
 
 // --- Heroicons ---
 const AcademicCapIcon = ({ className }: { className?: string }) => (
@@ -83,7 +84,7 @@ const ArrowDownTrayIcon = ({ className }: { className?: string }) => (
 
 const Formations: React.FC = () => {
   const { items: formations } = useCrud<Formation>('omapi_formations', DEFAULT_FORMATIONS);
-  const { saveItem: saveRegistration } = useCrud<FormationRegistration>('omapi_formation_registrations', DEFAULT_FORMATION_REGISTRATIONS);
+  const { items: registrations, saveItem: saveRegistration } = useCrud<FormationRegistration>('omapi_formation_registrations', DEFAULT_FORMATION_REGISTRATIONS);
   
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -97,43 +98,71 @@ const Formations: React.FC = () => {
     organization: '',
     message: ''
   });
+  const [registrationError, setRegistrationError] = useState<string | null>(null);
+  const [isSubmittingRegistration, setIsSubmittingRegistration] = useState(false);
 
   const baseFormations = formations.filter(f => f.category === 'Base');
   const advancedFormations = formations.filter(f => f.category === 'Avancee');
 
   const handleRegisterClick = (formation: Formation) => {
     setSelectedFormation(formation);
-    setFormData({ ...formData, message: `Je souhaite m'inscrire à la formation : ${formation.title}` });
+    setFormData({
+      name: '', email: '', phone: '', organization: '',
+      message: `Je souhaite m'inscrire à la formation : ${formation.title}`,
+    });
+    setRegistrationError(null);
     setIsModalOpen(true);
   };
 
   const handleCloseModal = () => {
+    if (isSubmittingRegistration) return;
     setIsModalOpen(false);
     setSelectedFormation(null);
     setFormData({ name: '', email: '', phone: '', organization: '', message: '' });
+    setRegistrationError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (selectedFormation) {
-        const newRegistration: FormationRegistration = {
-            id: Date.now(),
-            formationId: selectedFormation.id,
-            name: formData.name,
-            email: formData.email,
-            phone: formData.phone,
-            organization: formData.organization,
-            message: formData.message,
-            registrationDate: new Date().toLocaleDateString('fr-FR')
-        };
+    if (isSubmittingRegistration) return;
 
-        await saveRegistration(newRegistration);
-
-        alert(`Merci ${formData.name} ! Votre demande d'inscription pour "${selectedFormation.title}" a bien été reçue. Nos équipes vous contacteront sous peu.`);
+    const normalized = normalizeFormationRegistration(formData);
+    const validationError = validateFormationRegistration(normalized, selectedFormation, registrations);
+    if (validationError) {
+      setRegistrationError(validationError);
+      return;
     }
-    
-    handleCloseModal();
+
+    setRegistrationError(null);
+    setIsSubmittingRegistration(true);
+    try {
+      const newRegistration: FormationRegistration = {
+        ...normalized,
+        id: Date.now(),
+        formationId: selectedFormation!.id,
+        name: normalized.name,
+        email: normalized.email,
+        phone: normalized.phone || '',
+        organization: normalized.organization || '',
+        message: normalized.message || '',
+        registrationDate: new Date().toISOString(),
+      };
+
+      const saved = await saveRegistration(newRegistration);
+      if (!saved) {
+        setRegistrationError("L'inscription n'a pas pu être enregistrée dans cette démonstration locale. Vos informations restent dans le formulaire ; réessayez.");
+        return;
+      }
+
+      alert(`Votre demande pour « ${selectedFormation!.title} » a été enregistrée dans la démonstration locale sur ce navigateur. L’envoi à l’OMAPI et la prise de contact ne sont pas encore automatisés.`);
+      setIsModalOpen(false);
+      setSelectedFormation(null);
+      setFormData({ name: '', email: '', phone: '', organization: '', message: '' });
+    } catch {
+      setRegistrationError("Une erreur a empêché l'enregistrement. Vos informations restent dans le formulaire ; réessayez.");
+    } finally {
+      setIsSubmittingRegistration(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -312,13 +341,14 @@ const Formations: React.FC = () => {
                         <h3 className="text-lg font-bold text-white">Inscription Formation</h3>
                         <p className="text-blue-200 text-xs mt-1 truncate max-w-[300px]">{selectedFormation?.title}</p>
                     </div>
-                    <button onClick={handleCloseModal} className="text-white/70 hover:text-white transition-colors">
+                    <button type="button" onClick={handleCloseModal} disabled={isSubmittingRegistration} className="text-white/70 hover:text-white transition-colors disabled:opacity-50">
                         <XMarkIcon className="w-6 h-6" />
                     </button>
                 </div>
                 
                 <div className="overflow-y-auto p-6">
                     <form onSubmit={handleSubmit} className="space-y-4">
+                        {registrationError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{registrationError}</p>}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Nom complet</label>
                             <div className="relative">
@@ -326,8 +356,10 @@ const Formations: React.FC = () => {
                                     <UserIcon className="h-5 w-5 text-gray-400" />
                                 </div>
                                 <input 
-                                    type="text" 
+                                    type="text"
                                     name="name"
+                                    autoComplete="name"
+                                    maxLength={120}
                                     required
                                     value={formData.name}
                                     onChange={handleChange}
@@ -344,8 +376,10 @@ const Formations: React.FC = () => {
                                     <EnvelopeIcon className="h-5 w-5 text-gray-400" />
                                 </div>
                                 <input 
-                                    type="email" 
+                                    type="email"
                                     name="email"
+                                    autoComplete="email"
+                                    maxLength={254}
                                     required
                                     value={formData.email}
                                     onChange={handleChange}
@@ -363,8 +397,10 @@ const Formations: React.FC = () => {
                                         <PhoneIcon className="h-5 w-5 text-gray-400" />
                                     </div>
                                     <input 
-                                        type="tel" 
+                                        type="tel"
                                         name="phone"
+                                        autoComplete="tel"
+                                        maxLength={40}
                                         value={formData.phone}
                                         onChange={handleChange}
                                         className="w-full pl-10 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-white text-gray-900"
@@ -381,6 +417,8 @@ const Formations: React.FC = () => {
                                     <input 
                                         type="text" 
                                         name="organization"
+                                        autoComplete="organization"
+                                        maxLength={160}
                                         value={formData.organization}
                                         onChange={handleChange}
                                         className="w-full pl-10 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-white text-gray-900"
@@ -394,6 +432,7 @@ const Formations: React.FC = () => {
                             <label className="block text-sm font-medium text-gray-700 mb-1">Message (Optionnel)</label>
                             <textarea 
                                 rows={3}
+                                maxLength={1500}
                                 name="message"
                                 value={formData.message}
                                 onChange={handleChange}
@@ -403,18 +442,20 @@ const Formations: React.FC = () => {
                         </div>
 
                         <div className="pt-2 flex justify-end space-x-3">
-                            <button 
+                            <button
                                 type="button"
                                 onClick={handleCloseModal}
-                                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium transition-colors"
+                                disabled={isSubmittingRegistration}
+                                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium transition-colors disabled:opacity-50"
                             >
                                 Annuler
                             </button>
-                            <button 
+                            <button
                                 type="submit"
-                                className="px-6 py-2 bg-primary hover:bg-secondary text-white rounded-lg font-medium transition-colors shadow-sm"
+                                disabled={isSubmittingRegistration}
+                                className="px-6 py-2 bg-primary hover:bg-secondary text-white rounded-lg font-medium transition-colors shadow-sm disabled:opacity-60"
                             >
-                                Confirmer l'inscription
+                                {isSubmittingRegistration ? 'Enregistrement…' : 'Confirmer l’inscription'}
                             </button>
                         </div>
                     </form>
