@@ -1,0 +1,5 @@
+{
+  "name": "OMAPI Portal",
+  "description": "Portail officiel de l'Office Malgache de la Propriété Industrielle - Modernisé en React/TypeScript",
+  "requestFramePermissions": []
+}
