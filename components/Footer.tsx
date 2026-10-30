@@ -27,29 +27,32 @@ const Footer: React.FC = () => {
             </address>
           </div>
 
-          {/* Column 2: Quick Links */}
+          {/* Column 2: Useful resources */}
           <div>
-            <h3 className="text-lg font-bold uppercase tracking-wider mb-4 border-b border-blue-800 pb-2">Ressources</h3>
+            <h3 className="text-lg font-bold uppercase tracking-wider mb-4 border-b border-blue-800 pb-2">Ressources utiles</h3>
             <ul className="space-y-3 text-sm text-gray-300">
+              <li><Link to="/identifier-pi" className="hover:text-white hover:underline">Identifier ma propriété industrielle</Link></li>
               <li><Link to="/gopi" className="hover:text-white hover:underline">Gazette Officielle (GOPI)</Link></li>
-              <li><Link to="/formulaires" className="hover:text-white hover:underline">Formulaires & Guides</Link></li>
-              <li><Link to="/legislation" className="hover:text-white hover:underline">Législation & Textes</Link></li>
-              <li><Link to="/service/marque" className="hover:text-white hover:underline">Recherche de Marques</Link></li>
-              <li><Link to="/service/brevet" className="hover:text-white hover:underline">Base de données Brevets</Link></li>
-              <li><Link to="/faq" className="hover:text-white hover:underline">Foire Aux Questions</Link></li>
+              <li><Link to="/formulaires" className="hover:text-white hover:underline">Formulaires</Link></li>
+              <li><Link to="/guides" className="hover:text-white hover:underline">Guides pratiques</Link></li>
+              <li><Link to="/strategie-pi" className="hover:text-white hover:underline">Stratégie de PI</Link></li>
+              <li><Link to="/legislation" className="hover:text-white hover:underline">Législation & textes</Link></li>
+              <li><Link to="/faq" className="hover:text-white hover:underline">Foire aux questions</Link></li>
+              <li><Link to="/international" className="hover:text-white hover:underline">Procédures internationales</Link></li>
             </ul>
           </div>
 
-          {/* Column 3: Policies */}
+          {/* Column 3: Explore OMAPI */}
           <div>
-            <h3 className="text-lg font-bold uppercase tracking-wider mb-4 border-b border-blue-800 pb-2">Politiques</h3>
+            <h3 className="text-lg font-bold uppercase tracking-wider mb-4 border-b border-blue-800 pb-2">Découvrir l’OMAPI</h3>
             <ul className="space-y-3 text-sm text-gray-300">
-              <li><Link to="/legislation" className="hover:text-white hover:underline">Politique de confidentialité</Link></li>
-              <li><Link to="/legislation" className="hover:text-white hover:underline">Conditions d'utilisation</Link></li>
-              <li><Link to="/faq" className="hover:text-white hover:underline">Accessibilité</Link></li>
-              <li><Link to="/legislation" className="hover:text-white hover:underline">Sécurité de l'information</Link></li>
-              <li><Link to="/missions" className="hover:text-white hover:underline">Plan stratégique</Link></li>
-              <li><Link to="/gopi" className="hover:text-white hover:underline">Données ouvertes</Link></li>
+              <li><Link to="/presentation" className="hover:text-white hover:underline">Présentation</Link></li>
+              <li><Link to="/organisation" className="hover:text-white hover:underline">Organisation</Link></li>
+              <li><Link to="/news" className="hover:text-white hover:underline">Actualités</Link></li>
+              <li><Link to="/events" className="hover:text-white hover:underline">Événements</Link></li>
+              <li><Link to="/jobs" className="hover:text-white hover:underline">Offres d’emploi</Link></li>
+              <li><Link to="/postuler" className="hover:text-white hover:underline">Déposer une candidature</Link></li>
+              <li><Link to="/contact" className="hover:text-white hover:underline">Nous contacter</Link></li>
             </ul>
           </div>
 
@@ -69,9 +72,9 @@ const Footer: React.FC = () => {
               </a>
             </div>
             <div className="bg-blue-800 p-4 rounded text-center">
-                <p className="text-xs text-blue-200 mb-2">Abonnez-vous à notre newsletter</p>
+                <p className="text-xs text-blue-200 mb-2">Une question ? L’équipe OMAPI est à votre écoute.</p>
                 <Link to="/contact" className="inline-block bg-red-700 hover:bg-red-800 text-white text-xs font-bold py-2 px-4 rounded transition-colors uppercase">
-                    S'inscrire
+                    Nous contacter
                 </Link>
             </div>
           </div>

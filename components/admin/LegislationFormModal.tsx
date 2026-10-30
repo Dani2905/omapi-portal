@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { LegislationItem } from '../../types';
-import { XMarkIcon, DocumentTextIcon, CalendarIcon, TagIcon, LinkIcon, ScaleIcon, ArrowUpTrayIcon } from './AdminIcons';
+import { validateLegislationDraft, validateLegislationPdfMetadata, hasPdfSignature, normalizeLegislationDraft } from '../../utils/legislationLogic';
+import { XMarkIcon, DocumentTextIcon, CalendarIcon, LinkIcon, ScaleIcon, ArrowUpTrayIcon } from './AdminIcons';
 
 interface LegislationFormModalProps {
   isOpen: boolean;
@@ -12,27 +13,61 @@ interface LegislationFormModalProps {
 
 const LegislationFormModal: React.FC<LegislationFormModalProps> = ({ isOpen, onClose, onSave, initialData }) => {
   const [formData, setFormData] = useState<Partial<LegislationItem>>({});
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     if (isOpen) {
       setFormData(initialData);
+      setErrorMessage('');
     }
   }, [isOpen, initialData]);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData({ ...formData, fileUrl: reader.result as string });
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    const metadataError = validateLegislationPdfMetadata(file);
+    if (metadataError) {
+      setErrorMessage(metadataError);
+      e.target.value = '';
+      return;
+    }
+
+    try {
+      const header = new Uint8Array(await file.slice(0, 8).arrayBuffer());
+      if (!hasPdfSignature(header)) {
+        setErrorMessage('Le fichier sélectionné ne possède pas une signature PDF valide.');
+        e.target.value = '';
+        return;
+      }
+
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => typeof reader.result === 'string'
+          ? resolve(reader.result)
+          : reject(new Error('Lecture du fichier impossible.'));
+        reader.onerror = () => reject(new Error('Lecture du fichier impossible.'));
+        reader.readAsDataURL(file);
+      });
+
+      setFormData((current) => ({ ...current, fileUrl: dataUrl, fileName: file.name }));
+      setErrorMessage('');
+    } catch {
+      setErrorMessage('Impossible de lire ce fichier. Réessayez avec un autre PDF.');
+      e.target.value = '';
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    const normalized = normalizeLegislationDraft(formData);
+    const validationError = validateLegislationDraft(normalized);
+    if (validationError) {
+      setErrorMessage(validationError);
+      return;
+    }
+    setErrorMessage('');
+    onSave(normalized);
   };
 
   if (!isOpen) return null;
@@ -142,17 +177,24 @@ const LegislationFormModal: React.FC<LegislationFormModalProps> = ({ isOpen, onC
                             <input 
                                 type="text" 
                                 className="w-full pl-9 px-3 py-2 border border-slate-300 focus:border-slate-900 outline-none text-xs text-slate-600 bg-white placeholder-slate-400"
-                                value={formData.fileUrl || ''}
-                                onChange={e => setFormData({...formData, fileUrl: e.target.value})}
-                                placeholder="URL du fichier ou base64..."
+                                value={formData.fileUrl?.startsWith('data:') ? '' : formData.fileUrl || ''}
+                                onChange={e => setFormData({ ...formData, fileUrl: e.target.value, fileName: undefined })}
+                                placeholder={formData.fileUrl?.startsWith('data:') ? 'PDF importé (intégré au dossier)' : 'URL HTTPS du PDF'}
                             />
                         </div>
                         <label className="block w-full text-center px-3 py-2 border border-slate-300 border-dashed text-[10px] font-bold uppercase tracking-widest text-slate-500 cursor-pointer hover:bg-slate-100">
                             <ArrowUpTrayIcon className="w-3 h-3 inline mr-1" /> Uploader un document
-                            <input type="file" className="hidden" accept=".pdf,.doc,.docx" onChange={handleFileUpload} />
+                            <input type="file" className="hidden" accept="application/pdf,.pdf" onChange={handleFileUpload} />
                         </label>
+                        {formData.fileName && <p className="text-[10px] text-green-700">PDF importé : {formData.fileName}</p>}
                     </div>
                 </div>
+
+                {errorMessage && (
+                    <p role="alert" className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                        {errorMessage}
+                    </p>
+                )}
 
                 <div className="pt-4 flex justify-end space-x-3 border-t border-slate-200">
                     <button 

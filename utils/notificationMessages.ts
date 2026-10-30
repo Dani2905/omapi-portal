@@ -134,10 +134,6 @@ export function describeConfigurationSave(key: string): { success: string; error
       success: 'Les paramètres de présentation du site ont été enregistrés.',
       error: 'Échec : les paramètres de présentation du site n’ont pas été enregistrés.',
     },
-    omapi_home_scam: {
-      success: 'La rubrique « Alerte arnaques » de la page d’accueil a été enregistrée.',
-      error: 'Échec : la rubrique « Alerte arnaques » de la page d’accueil n’a pas été enregistrée.',
-    },
     omapi_home_resources: {
       success: 'Les ressources vedettes de la page d’accueil ont été enregistrées.',
       error: 'Échec : les ressources vedettes de la page d’accueil n’ont pas été enregistrées.',

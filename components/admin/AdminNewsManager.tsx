@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { NewsItem } from '../../types';
+import { sortNewsItems } from '../../utils/editorialLogic';
 import { PlusIcon, PencilSquareIcon, TrashIcon, CalendarIcon, StarIcon, MagnifyingGlassIcon, FunnelIcon, NewspaperIcon } from './AdminIcons';
 
 interface AdminNewsManagerProps {
@@ -14,14 +15,17 @@ const AdminNewsManager: React.FC<AdminNewsManagerProps> = ({ newsItems, onAdd, o
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
 
-  const filteredItems = newsItems.filter(item => {
-    const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase());
+  const orderedItems = sortNewsItems(newsItems);
+  const normalizedSearch = searchTerm.trim().toLocaleLowerCase('fr');
+  const filteredItems = orderedItems.filter((item) => {
+    const matchesSearch = String(item.title || '').toLocaleLowerCase('fr').includes(normalizedSearch)
+      || String(item.description || '').toLocaleLowerCase('fr').includes(normalizedSearch);
     const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
 
-  const categories = Array.from(new Set(newsItems.map(item => item.category)));
-  const totalFeatured = newsItems.filter(i => i.featured).length;
+  const categories = Array.from(new Set(newsItems.map((item) => item.category).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'fr'));
+  const totalFeatured = newsItems.filter((item) => item.featured === true).length;
 
   return (
     <div className="space-y-6">
@@ -63,7 +67,7 @@ const AdminNewsManager: React.FC<AdminNewsManagerProps> = ({ newsItems, onAdd, o
             <div className="bg-white p-5 rounded-sm border border-slate-200 flex items-center justify-between">
                 <div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Dernière publication</p>
-                    <p className="text-sm font-mono font-bold text-slate-900 mt-1 truncate max-w-[150px]">{newsItems[0]?.date || 'N/A'}</p>
+                    <p className="text-sm font-mono font-bold text-slate-900 mt-1 truncate max-w-[150px]">{orderedItems[0]?.date || 'N/A'}</p>
                 </div>
                 <div className="bg-slate-50 p-2.5 rounded-sm border border-slate-100 text-green-600">
                     <CalendarIcon className="w-5 h-5" />
@@ -103,23 +107,23 @@ const AdminNewsManager: React.FC<AdminNewsManagerProps> = ({ newsItems, onAdd, o
 
         {/* Content Table/List */}
         <div className="bg-white rounded-sm border border-slate-200 overflow-hidden">
-            <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-slate-200">
+            <div className="hidden md:block overflow-x-auto">
+                <table className="min-w-full table-fixed divide-y divide-slate-200">
                     <thead className="bg-slate-50">
                         <tr>
-                            <th scope="col" className="px-4 sm:px-6 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                            <th scope="col" className="w-[44%] px-4 sm:px-6 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                                 Article
                             </th>
-                            <th scope="col" className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest hidden md:table-cell">
+                            <th scope="col" className="hidden w-[16%] px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest md:table-cell">
                                 Catégorie
                             </th>
-                            <th scope="col" className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest hidden md:table-cell">
+                            <th scope="col" className="hidden w-[14%] px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest md:table-cell">
                                 Date
                             </th>
-                            <th scope="col" className="px-4 sm:px-6 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                            <th scope="col" className="w-[13%] px-3 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                                 Statut
                             </th>
-                            <th scope="col" className="px-4 sm:px-6 py-3 text-right text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                            <th scope="col" className="w-[13%] px-3 py-3 text-right text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                                 Actions
                             </th>
                         </tr>
@@ -127,7 +131,7 @@ const AdminNewsManager: React.FC<AdminNewsManagerProps> = ({ newsItems, onAdd, o
                     <tbody className="bg-white divide-y divide-slate-100">
                         {filteredItems.map((item) => (
                             <tr key={item.id} className="hover:bg-slate-50 group">
-                                <td className="px-4 sm:px-6 py-4 w-full sm:w-auto">
+                                <td className="px-4 sm:px-6 py-4 align-top">
                                     <div className="flex items-center">
                                         <div className="h-10 w-14 flex-shrink-0 overflow-hidden rounded-sm border border-slate-200 bg-slate-50 hidden sm:block">
                                             {item.image ? (
@@ -139,8 +143,8 @@ const AdminNewsManager: React.FC<AdminNewsManagerProps> = ({ newsItems, onAdd, o
                                             )}
                                         </div>
                                         <div className="sm:ml-4 flex-1 min-w-0">
-                                            <div className="text-[11px] font-bold text-slate-900 uppercase tracking-tight truncate">{item.title}</div>
-                                            <div className="text-[10px] text-slate-500 truncate mt-0.5 max-w-[200px] sm:max-w-xs md:max-w-md">{item.description}</div>
+                                            <div className="text-[11px] font-bold text-slate-900 uppercase tracking-tight whitespace-normal break-words leading-snug">{item.title}</div>
+                                            <div className="text-[10px] text-slate-500 mt-1 line-clamp-2 break-words">{item.description}</div>
                                             {/* Mobile specific metadata block */}
                                             <div className="mt-1 flex items-center gap-2 md:hidden">
                                                 <span className="inline-block text-[9px] font-bold uppercase tracking-widest text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
@@ -153,12 +157,12 @@ const AdminNewsManager: React.FC<AdminNewsManagerProps> = ({ newsItems, onAdd, o
                                         </div>
                                     </div>
                                 </td>
-                                <td className="px-4 py-4 whitespace-nowrap text-[10px] text-slate-500 hidden md:table-cell">
+                                <td className="hidden px-4 py-4 text-[10px] text-slate-500 md:table-cell">
                                     <span className="px-2 py-0.5 inline-flex text-[9px] font-bold uppercase tracking-widest rounded-sm border border-blue-100 bg-blue-50 text-blue-700">
                                         {item.category}
                                     </span>
                                 </td>
-                                <td className="px-4 py-4 whitespace-nowrap text-[10px] text-slate-500 font-mono hidden md:table-cell">
+                                <td className="hidden px-4 py-4 text-[10px] text-slate-500 font-mono break-words md:table-cell">
                                     {item.date}
                                 </td>
                                 <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
@@ -197,6 +201,68 @@ const AdminNewsManager: React.FC<AdminNewsManagerProps> = ({ newsItems, onAdd, o
                     </tbody>
                 </table>
             </div>
+
+            {/* Vue mobile : cartes pour laisser les titres et résumés respirer */}
+            <div className="divide-y divide-slate-100 md:hidden">
+                {filteredItems.map((item) => (
+                    <article key={item.id} className="p-4 space-y-3">
+                        <div className="flex items-start gap-3">
+                            <div className="h-16 w-20 shrink-0 overflow-hidden rounded-sm border border-slate-200 bg-slate-100">
+                                {item.image ? (
+                                    <img
+                                        src={item.image}
+                                        alt=""
+                                        className="h-full w-full object-cover"
+                                        onError={(event) => { event.currentTarget.style.display = 'none'; }}
+                                    />
+                                ) : (
+                                    <div className="flex h-full items-center justify-center text-[8px] font-bold text-slate-400">IMG</div>
+                                )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <h3 className="text-sm font-bold leading-snug text-slate-900 whitespace-normal break-words">{item.title}</h3>
+                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                    <span className="max-w-full rounded border border-blue-100 bg-blue-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-blue-700 whitespace-normal break-words">
+                                        {item.category}
+                                    </span>
+                                    <time className="text-[10px] font-mono text-slate-500 whitespace-normal break-words">{item.date}</time>
+                                </div>
+                            </div>
+                        </div>
+                        <p className="text-xs leading-relaxed text-slate-600 whitespace-pre-wrap break-words">{item.description}</p>
+                        <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                            {item.featured === true ? (
+                                <span className="inline-flex items-center gap-1 rounded border border-yellow-100 bg-yellow-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-yellow-700">
+                                    <StarIcon className="h-3 w-3 text-yellow-600" /> À la une
+                                </span>
+                            ) : (
+                                <span className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-slate-600">Standard</span>
+                            )}
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => onEdit(item)}
+                                    className="flex h-10 w-10 items-center justify-center rounded border border-slate-200 text-slate-600 hover:bg-blue-50 hover:text-blue-700"
+                                    aria-label={`Modifier l’article ${item.title}`}
+                                    title="Modifier"
+                                >
+                                    <PencilSquareIcon className="h-4 w-4" />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => onDelete(item.id)}
+                                    className="flex h-10 w-10 items-center justify-center rounded border border-slate-200 text-slate-600 hover:bg-red-50 hover:text-red-700"
+                                    aria-label={`Supprimer l’article ${item.title}`}
+                                    title="Supprimer"
+                                >
+                                    <TrashIcon className="h-4 w-4" />
+                                </button>
+                            </div>
+                        </div>
+                    </article>
+                ))}
+            </div>
+
             {filteredItems.length === 0 && (
                 <div className="text-center py-16 text-slate-400">
                     <NewspaperIcon className="w-10 h-10 mx-auto mb-3 text-slate-200" />

@@ -45,7 +45,6 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ activeTab, setActiveTab, on
         { id: 'events', label: 'Événements', icon: CalendarIcon },
         { id: 'jobs', label: 'Offres d\'emploi', icon: BriefcaseIcon },
         { id: 'job_applications', label: 'Candidatures web', icon: DocumentTextIcon },
-        { id: 'home-scam', label: 'Alerte Arnaques', icon: ExclamationTriangleIcon },
         { id: 'home-resources', label: 'Ressources Accueil', icon: PlayCircleIcon },
         { id: 'hero', label: 'Carrousel Accueil', icon: PhotoIcon },
         { id: 'announcement', label: 'Bandeau Info', icon: MegaphoneIcon },

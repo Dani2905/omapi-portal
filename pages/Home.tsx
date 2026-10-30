@@ -2,7 +2,7 @@
 import React from 'react';
 import HeroSlider from '../components/HeroSlider';
 import NewsTabsSection from '../components/home/NewsTabsSection';
-import ScamAndToolsSection from '../components/home/ScamAndToolsSection';
+import IPStrategySection from '../components/home/IPStrategySection';
 import FeaturedResourcesSection from '../components/home/FeaturedResourcesSection';
 
 const Home: React.FC = () => {
@@ -15,8 +15,8 @@ const Home: React.FC = () => {
         {/* News, Blog, Remarks Panels */}
         <NewsTabsSection />
 
-        {/* Scams Warning & IP Identifier */}
-        <ScamAndToolsSection />
+        {/* PI strategy and management tools */}
+        <IPStrategySection />
 
         {/* Featured Resources (OMAPI Hour & Video) */}
         <FeaturedResourcesSection />

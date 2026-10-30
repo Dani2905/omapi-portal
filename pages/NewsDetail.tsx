@@ -1,10 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useParams, Link, Navigate } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
 import { LATEST_NEWS } from '../data/mocks/news';
 import { NewsItem } from '../types';
 import { useCrud } from '../hooks/useCrud';
+import { sanitizeNewsHtml, sortNewsItems } from '../utils/editorialLogic';
 
 // --- Heroicons ---
 const CalendarIcon = ({ className }: { className?: string }) => (
@@ -28,31 +29,17 @@ const ShareIcon = ({ className }: { className?: string }) => (
 
 const NewsDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const [newsItem, setNewsItem] = useState<NewsItem | null>(null);
-  const [relatedNews, setRelatedNews] = useState<NewsItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  useEffect(() => { window.scrollTo(0, 0); }, [id]);
   const { items: allNews, loading: crudLoading } = useCrud<NewsItem>('omapi_news', LATEST_NEWS);
+  const numericId = Number(id);
+  const newsItem = Number.isSafeInteger(numericId)
+    ? allNews.find((item) => String(item.id) === String(numericId))
+    : undefined;
+  const relatedNews = newsItem
+    ? sortNewsItems(allNews).filter((item) => String(item.id) !== String(newsItem.id)).slice(0, 3)
+    : [];
 
-  useEffect(() => {
-    // Scroll to top when opening a new article
-    window.scrollTo(0, 0);
-
-    if (crudLoading) return;
-    
-    // Find current news
-    const foundNews = allNews.find(n => n.id === Number(id));
-    
-    // Find related news (exclude current, take 3 latest)
-    const others = allNews.filter(n => n.id !== Number(id)).slice(0, 3);
-
-    if (foundNews) {
-      setNewsItem(foundNews);
-      setRelatedNews(others);
-    }
-    setLoading(false);
-  }, [id, allNews, crudLoading]);
-
-  if (loading) {
+  if (crudLoading) {
     return <div className="min-h-screen bg-gray-50 flex items-center justify-center">Chargement...</div>;
   }
 
@@ -65,7 +52,7 @@ const NewsDetail: React.FC = () => {
       <Breadcrumb items={[
           { label: 'Ressources' }, 
           { label: 'Actualités', path: '/news' },
-          { label: newsItem.title.substring(0, 30) + '...' }
+          { label: newsItem.title.length > 30 ? `${newsItem.title.slice(0, 30)}…` : newsItem.title }
       ]} />
 
       <div className="container mx-auto max-w-7xl px-4 py-8">
@@ -74,12 +61,17 @@ const NewsDetail: React.FC = () => {
             {/* Main Content */}
             <div className="lg:col-span-2 min-w-0 break-words">
                 <article className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="relative h-64 md:h-96 w-full">
-                        <img 
-                            src={newsItem.image} 
-                            alt={newsItem.title} 
-                            className="w-full h-full object-cover"
-                        />
+                    <div className="relative h-64 md:h-96 w-full bg-slate-200">
+                        {newsItem.image ? (
+                            <img
+                                src={newsItem.image}
+                                alt={newsItem.title}
+                                className="w-full h-full object-cover"
+                                onError={(event) => { event.currentTarget.style.display = 'none'; }}
+                            />
+                        ) : (
+                            <div className="flex h-full items-center justify-center text-sm font-semibold uppercase tracking-widest text-slate-500">Image non disponible</div>
+                        )}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
                         <div className="absolute bottom-0 left-0 p-6 md:p-8 text-white">
                             <div className="flex flex-wrap gap-3 mb-3">
@@ -126,7 +118,7 @@ const NewsDetail: React.FC = () => {
                             `}</style>
                             
                             {newsItem.content ? (
-                                <div className="rich-content" dangerouslySetInnerHTML={{ __html: newsItem.content }} />
+                                <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeNewsHtml(newsItem.content) }} />
                             ) : (
                                 <p className="italic text-gray-500">Aucun contenu supplémentaire disponible pour cet article.</p>
                             )}
@@ -139,13 +131,13 @@ const NewsDetail: React.FC = () => {
                             </span>
                             <div className="flex space-x-3">
                                 <button 
-                                    onClick={() => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`, '_blank')}
+                                    onClick={() => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`, '_blank', 'noopener,noreferrer')}
                                     className="bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 transition w-10 h-10 flex items-center justify-center"
                                 >
                                     <i className="fab fa-facebook-f"></i>
                                 </button>
                                 <button 
-                                    onClick={() => window.open(`https://www.linkedin.com/shareArticle?mini=true&url=${encodeURIComponent(window.location.href)}&title=${encodeURIComponent(newsItem.title)}`, '_blank')}
+                                    onClick={() => window.open(`https://www.linkedin.com/shareArticle?mini=true&url=${encodeURIComponent(window.location.href)}&title=${encodeURIComponent(newsItem.title)}`, '_blank', 'noopener,noreferrer')}
                                     className="bg-blue-700 text-white p-2 rounded-full hover:bg-blue-800 transition w-10 h-10 flex items-center justify-center"
                                 >
                                     <i className="fab fa-linkedin-in"></i>
@@ -168,11 +160,16 @@ const NewsDetail: React.FC = () => {
                         {relatedNews.map(item => (
                             <Link key={item.id} to={`/news/${item.id}`} className="flex gap-4 group">
                                 <div className="w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100">
-                                    <img 
-                                        src={item.image} 
-                                        alt={item.title} 
-                                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                                    />
+                                    {item.image ? (
+                                        <img
+                                            src={item.image}
+                                            alt={item.title}
+                                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                                            onError={(event) => { event.currentTarget.style.display = 'none'; }}
+                                        />
+                                    ) : (
+                                        <div className="flex h-full items-center justify-center text-center text-[8px] uppercase text-gray-400">Image<br />indisponible</div>
+                                    )}
                                 </div>
                                 <div>
                                     <span className="text-xs text-primary font-semibold block mb-1">{item.category}</span>

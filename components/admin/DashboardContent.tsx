@@ -11,7 +11,6 @@ import AdminGopiManager from './AdminGopiManager';
 import AdminEventsManager from './AdminEventsManager';
 import AdminLegislationManager from './AdminLegislationManager';
 import AdminDesignManager from './AdminDesignManager';
-import AdminScamManager from './AdminScamManager';
 import AdminResourcesManager from './AdminResourcesManager';
 import AdminJobsManager from './AdminJobsManager';
 import AdminJobApplicationsManager from './AdminJobApplicationsManager';
@@ -34,7 +33,7 @@ const DashboardContent: React.FC<DashboardContentProps> = ({ activeTab, setActiv
     case 'hero':
       return (
         <AdminHeroManager
-          slides={data.slides}
+          slides={data.slides.filter((slide: { newsId?: number }) => slide.newsId === undefined)}
           onAdd={() => openModal('slide', {
             title: '', subtitle: '', ctaText: 'En savoir plus', ctaLink: '/',
             image: 'https://picsum.photos/1920/800?random=' + Math.floor(Math.random() * 100)
@@ -69,13 +68,6 @@ const DashboardContent: React.FC<DashboardContentProps> = ({ activeTab, setActiv
         <AdminDesignManager
           config={data.siteConfig}
           onSave={data.saveSiteConfig}
-        />
-      );
-    case 'home-scam':
-      return (
-        <AdminScamManager
-          config={data.homeScamConfig}
-          onSave={data.saveHomeScamConfig}
         />
       );
     case 'home-resources':
@@ -132,7 +124,7 @@ const DashboardContent: React.FC<DashboardContentProps> = ({ activeTab, setActiv
       return (
         <AdminLegislationManager
           items={data.legislationItems}
-          onAdd={() => openModal('legislation', { title: '', type: 'Loi', category: 'Fondamental', date: '', description: '', fileUrl: '#' })}
+          onAdd={() => openModal('legislation', { title: '', type: 'Loi', category: 'Fondamental', date: '', description: '', fileUrl: '', fileName: '' })}
           onEdit={(item) => openModal('legislation', item)}
           onDelete={data.deleteLegislation}
         />

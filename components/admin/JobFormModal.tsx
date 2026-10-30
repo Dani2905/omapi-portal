@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import { JobOffer } from '../../types';
+import { getLocalDateInputValue, validateJobOfferDraft } from '../../utils/jobLogic';
 
 interface JobFormModalProps {
   isOpen: boolean;
@@ -20,12 +21,14 @@ const JobFormModal: React.FC<JobFormModalProps> = ({ isOpen, onClose, onSave, jo
     experience: '',
     description: '',
     status: 'Ouvert',
-    publishDate: new Date().toISOString().split('T')[0],
+    publishDate: getLocalDateInputValue(),
     deadline: '',
     fileUrl: ''
   });
+  const [validationError, setValidationError] = useState('');
 
   useEffect(() => {
+    setValidationError('');
     if (job) {
       setFormData(job);
     } else {
@@ -37,7 +40,7 @@ const JobFormModal: React.FC<JobFormModalProps> = ({ isOpen, onClose, onSave, jo
         experience: '',
         description: '',
         status: 'Ouvert',
-        publishDate: new Date().toISOString().split('T')[0],
+        publishDate: getLocalDateInputValue(),
         deadline: '',
         fileUrl: ''
       });
@@ -49,10 +52,17 @@ const JobFormModal: React.FC<JobFormModalProps> = ({ isOpen, onClose, onSave, jo
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    setValidationError('');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const validationMessage = validateJobOfferDraft(formData);
+    if (validationMessage) {
+      setValidationError(validationMessage);
+      return;
+    }
+    setValidationError('');
     onSave(formData);
   };
 
@@ -70,6 +80,7 @@ const JobFormModal: React.FC<JobFormModalProps> = ({ isOpen, onClose, onSave, jo
 
         <form onSubmit={handleSubmit} className="flex flex-col flex-grow overflow-hidden">
           <div className="p-6 space-y-6 overflow-y-auto flex-grow">
+            {validationError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{validationError}</p>}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-gray-700">Titre de l'offre</label>
@@ -166,6 +177,7 @@ const JobFormModal: React.FC<JobFormModalProps> = ({ isOpen, onClose, onSave, jo
                       type="date"
                       name="deadline"
                       value={formData.deadline || ''}
+                      min={formData.publishDate || undefined}
                       onChange={handleChange}
                       className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#002B49] focus:bg-white transition-colors"
                   />
@@ -178,7 +190,7 @@ const JobFormModal: React.FC<JobFormModalProps> = ({ isOpen, onClose, onSave, jo
                 <ReactQuill
                   theme="snow"
                   value={formData.description || ''}
-                  onChange={(content) => setFormData(prev => ({ ...prev, description: content }))}
+                  onChange={(content) => { setFormData(prev => ({ ...prev, description: content })); setValidationError(''); }}
                   placeholder="Décrivez l'offre en détail..."
                   className="border-0"
                 />

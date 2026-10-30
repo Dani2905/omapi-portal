@@ -13,7 +13,13 @@
     "test:notifications": "tsx tests/notificationMessages.test.ts",
     "test:formations": "tsx tests/formations.test.ts",
     "test:gopi": "tsx tests/gopi.test.ts",
-    "test:documents": "tsx tests/documentLibrary.test.ts"
+    "test:documents": "tsx tests/documentLibrary.test.ts",
+    "test:legislation": "tsx tests/legislation.test.ts",
+    "test:announcements": "tsx tests/announcementLogic.test.ts",
+    "test:editorial": "tsx tests/editorialLogic.test.ts",
+    "test:jobs": "tsx tests/jobLogic.test.ts",
+    "test:events": "tsx tests/eventLogic.test.ts",
+    "test:resources": "tsx tests/homeResources.test.ts"
   },
   "dependencies": {
     "cors": "^2.8.6",

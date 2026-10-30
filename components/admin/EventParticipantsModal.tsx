@@ -2,6 +2,7 @@
 import React from 'react';
 import { Event, EventRegistration } from '../../types';
 import { XMarkIcon, UsersIcon, TrashIcon, CalendarIcon, EnvelopeIcon, PhoneIcon, BuildingOfficeIcon } from './AdminIcons';
+import { normalizeEventRegistration } from '../../utils/eventLogic';
 
 interface EventParticipantsModalProps {
   isOpen: boolean;
@@ -16,7 +17,18 @@ const EventParticipantsModal: React.FC<EventParticipantsModalProps> = ({
 }) => {
   if (!isOpen || !event) return null;
 
-  const eventRegistrations = registrations.filter(r => r.eventId === event.id);
+  const eventRegistrations = (Array.isArray(registrations) ? registrations : [])
+    .map(normalizeEventRegistration)
+    .filter((registration): registration is EventRegistration => Boolean(registration && String(registration.eventId) === String(event.id)))
+    .sort((left, right) => {
+      const leftTime = new Date(left.registrationDate).getTime();
+      const rightTime = new Date(right.registrationDate).getTime();
+      return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
+    });
+  const formatRegistrationDate = (value: string) => {
+    const timestamp = new Date(value).getTime();
+    return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleDateString('fr-FR') : value || 'Date inconnue';
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto animate-fadeIn">
@@ -38,6 +50,7 @@ const EventParticipantsModal: React.FC<EventParticipantsModalProps> = ({
             
             <div className="p-0 overflow-y-auto flex-1 custom-scrollbar bg-white">
                 {eventRegistrations.length > 0 ? (
+                    <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50 sticky top-0 z-10">
                             <tr>
@@ -87,7 +100,7 @@ const EventParticipantsModal: React.FC<EventParticipantsModalProps> = ({
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {reg.registrationDate}
+                                        {formatRegistrationDate(reg.registrationDate)}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <button 
@@ -106,6 +119,7 @@ const EventParticipantsModal: React.FC<EventParticipantsModalProps> = ({
                             ))}
                         </tbody>
                     </table>
+                    </div>
                 ) : (
                     <div className="flex flex-col items-center justify-center py-16 text-center">
                         <div className="bg-gray-100 p-4 rounded-full mb-3">

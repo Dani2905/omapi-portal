@@ -19,6 +19,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     label: 'Procédures',
     children: [
+      { label: 'Identifier ma PI', path: '/identifier-pi' },
       { label: 'Marques', path: `/service/${SERVICE_IDS.MARQUE}` },
       { label: 'Brevets', path: `/service/${SERVICE_IDS.BREVET}` },
       { label: 'Dessins & Modèles', path: `/service/${SERVICE_IDS.DESSIN}` },
@@ -41,6 +42,7 @@ export const NAV_ITEMS: NavItem[] = [
       { label: 'Formations', path: '/formations' },
       { label: 'Formulaires', path: '/formulaires' },
       { label: 'Guides', path: '/guides' },
+      { label: 'Stratégie de PI', path: '/strategie-pi' },
       { label: 'FAQ', path: '/faq' },
     ]
   },

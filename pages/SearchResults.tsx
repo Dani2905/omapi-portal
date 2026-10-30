@@ -2,6 +2,8 @@ import React, { useMemo } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { useCrud } from '../hooks/useCrud';
 import { getLibraryPlainText } from '../utils/documentLibraryLogic';
+import { getNewsPlainText } from '../utils/editorialLogic';
+import { normalizeEventRecord } from '../utils/eventLogic';
 import { NewsItem, LegislationItem, Formulaire, Guide, Formation, Event, GopiItem } from '../types';
 import Breadcrumb from '../components/Breadcrumb';
 import { LATEST_NEWS } from '../data/mocks/news';
@@ -27,14 +29,15 @@ const SearchResults: React.FC = () => {
   const { items: formations } = useCrud<Formation>('omapi_formations', DEFAULT_FORMATIONS);
   const { items: events } = useCrud<Event>('omapi_events', DEFAULT_EVENTS);
   const { items: gopi } = useCrud<GopiItem>('omapi_gopi', DEFAULT_GOPI);
+  const safeEvents = (Array.isArray(events) ? events : []).map(normalizeEventRecord).filter((item): item is Event => item !== null);
 
   const results = useMemo(() => {
     if (!lowerQuery) return [];
 
-    const matchedNews = news.filter(item => 
-      item.title.toLowerCase().includes(lowerQuery) || 
-      item.description.toLowerCase().includes(lowerQuery)
-    ).map(item => ({ ...item, resultType: 'Actualité', link: `/news/${item.id}` }));
+    const matchedNews = news.filter((item) =>
+      [item.title, item.description, getNewsPlainText(item.content)]
+        .some((value) => String(value || '').toLocaleLowerCase('fr').includes(lowerQuery))
+    ).map((item) => ({ ...item, resultType: 'Actualité', link: `/news/${item.id}` }));
 
     const matchedLegislation = legislation.filter(item => 
       item.title.toLowerCase().includes(lowerQuery) || 
@@ -54,10 +57,9 @@ const SearchResults: React.FC = () => {
       (item.description && item.description.toLowerCase().includes(lowerQuery))
     ).map(item => ({ ...item, resultType: 'Formation', link: '/formations' }));
 
-    const matchedEvents = events.filter(item => 
-      item.title.toLowerCase().includes(lowerQuery) || 
-      item.description.toLowerCase().includes(lowerQuery)
-    ).map(item => ({ ...item, resultType: 'Événement', link: `/events/${item.id}` }));
+    const matchedEvents = safeEvents.filter((item) =>
+      [item.title, getNewsPlainText(item.description)].some((value) => value.toLocaleLowerCase('fr').includes(lowerQuery))
+    ).map((item) => ({ ...item, resultType: 'Événement', link: `/events/${item.id}` }));
 
     const matchedGopi = gopi.filter(item => 
       item.title.toLowerCase().includes(lowerQuery) || 

@@ -7,11 +7,12 @@ import { useCrud } from '../hooks/useCrud';
 import { JobOffer } from '../types';
 import { DEFAULT_JOBS } from '../constants';
 import 'react-quill-new/dist/quill.snow.css'; // Import for rich text styles
+import { isJobOpenOnDate, normalizeJobOfferDraft } from '../utils/jobLogic';
 
 const Jobs: React.FC = () => {
   const { items: jobs } = useCrud<JobOffer>('omapi_jobs', DEFAULT_JOBS, () => {});
 
-  const openJobs = jobs.filter(job => job.status === 'Ouvert');
+  const openJobs = jobs.filter((job): job is JobOffer => Boolean(job && isJobOpenOnDate(job)));
 
   return (
     <div className="bg-white min-h-screen font-sans">
@@ -82,7 +83,7 @@ const Jobs: React.FC = () => {
                     </div>
                     <div 
                       className="text-gray-700 text-sm border-t border-gray-100 pt-4 mt-4 richtext-content text-wrap break-words"
-                      dangerouslySetInnerHTML={{ __html: job.description }}
+                      dangerouslySetInnerHTML={{ __html: String(normalizeJobOfferDraft(job).description || '') }}
                     />
                   </div>
                   <div className="shrink-0 mt-2 md:mt-0">

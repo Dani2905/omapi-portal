@@ -5,6 +5,8 @@ import Breadcrumb from '../components/Breadcrumb';
 import { DEFAULT_EVENTS } from '../constants';
 import { Event } from '../types';
 import { useCrud } from '../hooks/useCrud';
+import { formatEventDate, getEffectiveEventStatus, getLocalEventDate, normalizeEventRecord, parseEventDate, isSafeEventImage } from '../utils/eventLogic';
+import { getNewsPlainText } from '../utils/editorialLogic';
 
 // --- Icons ---
 const CalendarIcon = ({ className }: { className?: string }) => (
@@ -34,6 +36,18 @@ const ArrowRightIcon = ({ className }: { className?: string }) => (
 
 const Events: React.FC = () => {
   const { items: events } = useCrud<Event>('omapi_events', DEFAULT_EVENTS);
+  const safeEvents = (Array.isArray(events) ? events : [])
+    .map(normalizeEventRecord)
+    .filter((event): event is Event => event !== null)
+    .sort((left, right) => {
+      const today = getLocalEventDate();
+      const leftDate = parseEventDate(left.date) || '0000-00-00';
+      const rightDate = parseEventDate(right.date) || '0000-00-00';
+      const leftPast = leftDate < today;
+      const rightPast = rightDate < today;
+      if (leftPast !== rightPast) return leftPast ? 1 : -1;
+      return leftPast ? rightDate.localeCompare(leftDate) : leftDate.localeCompare(rightDate);
+    });
 
   const getStatusBadge = (status: string) => {
       switch(status) {
@@ -56,19 +70,21 @@ const Events: React.FC = () => {
             <div className="w-24 h-1.5 bg-primary rounded-full mt-4"></div>
         </div>
 
-        {events.length > 0 ? (
+        {safeEvents.length > 0 ? (
             <div className="space-y-8">
-                {events.map((event) => (
+                {safeEvents.map((event) => {
+                  const eventStatus = getEffectiveEventStatus(event);
+                  return (
                     <article key={event.id} className="bg-white rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 flex flex-col md:flex-row group border border-gray-100">
-                        <div className="md:w-1/3 h-64 md:h-auto relative overflow-hidden">
-                            <img 
-                                src={event.image} 
-                                alt={event.title} 
+                        <div className="md:w-1/3 h-64 md:h-auto relative overflow-hidden bg-slate-100">
+                            {event.image && isSafeEventImage(event.image) ? <img
+                                src={event.image}
+                                alt={event.title}
                                 className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700"
-                            />
+                            /> : <div className="w-full h-full flex items-center justify-center text-slate-400"><CalendarIcon className="w-16 h-16" /></div>}
                             <div className="absolute top-4 left-4">
-                                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide shadow-sm ${getStatusBadge(event.status)}`}>
-                                    {event.status}
+                                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide shadow-sm ${getStatusBadge(eventStatus)}`}>
+                                    {eventStatus}
                                 </span>
                             </div>
                         </div>
@@ -76,7 +92,7 @@ const Events: React.FC = () => {
                             <div className="flex flex-wrap gap-4 text-sm text-gray-500 mb-4">
                                 <div className="flex items-center">
                                     <CalendarIcon className="w-4 h-4 mr-2 text-primary" />
-                                    {event.date}
+                                    {formatEventDate(event.date)}
                                 </div>
                                 <div className="flex items-center">
                                     <ClockIcon className="w-4 h-4 mr-2 text-primary" />
@@ -93,7 +109,7 @@ const Events: React.FC = () => {
                             </h3>
                             
                             <p className="text-gray-600 mb-6 line-clamp-3 leading-relaxed flex-1 break-words">
-                                {event.description ? event.description.replace(/<[^>]*>?/gm, '') : ''}
+                                {getNewsPlainText(event.description)}
                             </p>
                             
                             <div className="mt-auto pt-6 border-t border-gray-100 flex justify-between items-center">
@@ -106,7 +122,8 @@ const Events: React.FC = () => {
                             </div>
                         </div>
                     </article>
-                ))}
+                  );
+                })}
             </div>
         ) : (
             <div className="text-center py-24 bg-white rounded-xl shadow-sm border border-gray-100">

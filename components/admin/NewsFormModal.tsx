@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import { NewsItem } from '../../types';
+import { isAllowedNewsImageUrl, MAX_NEWS_DESCRIPTION_LENGTH, MAX_NEWS_IMAGE_DATA_URL_LENGTH, MAX_NEWS_IMAGE_UPLOAD_BYTES, MAX_NEWS_TITLE_LENGTH, NEWS_CATEGORIES, normalizeNewsDraft, sanitizeNewsHtml, validateNewsDraft } from '../../utils/editorialLogic';
 import { 
   XMarkIcon, PhotoIcon, ArrowPathIcon, TagIcon, CalendarIcon, 
   NewspaperIcon, ArrowUpTrayIcon, StarIcon, EyeIcon
@@ -18,66 +19,94 @@ interface NewsFormModalProps {
 const NewsFormModal: React.FC<NewsFormModalProps> = ({ isOpen, onClose, onSave, initialData }) => {
   const [formData, setFormData] = useState<Partial<NewsItem>>({});
   const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
+  const [formError, setFormError] = useState('');
 
   useEffect(() => {
     if (isOpen) {
       setFormData(initialData);
       setActiveTab('edit');
+      setFormError('');
     }
   }, [isOpen, initialData]);
 
   const generateRandomImage = () => {
     const randomId = Math.floor(Math.random() * 1000);
-    setFormData({...formData, image: `https://picsum.photos/800/600?random=${randomId}`});
+    setFormData((current) => ({ ...current, image: `https://picsum.photos/800/600?random=${randomId}` }));
+    setFormError('');
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
-          
-          const MAX_WIDTH = 800;
-          const MAX_HEIGHT = 800;
+    const input = e.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
 
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width *= MAX_HEIGHT / height;
-              height = MAX_HEIGHT;
-            }
-          }
-          
-          canvas.width = width;
-          canvas.height = height;
-          
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, width, height);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
-            setFormData({ ...formData, image: dataUrl });
-          } else {
-            setFormData({ ...formData, image: reader.result as string });
-          }
-        };
-        img.src = reader.result as string;
-      };
-      reader.readAsDataURL(file);
+    if (!/^image\/(jpeg|png|webp|gif)$/i.test(file.type)) {
+      setFormError('Choisissez une image JPEG, PNG, WebP ou GIF.');
+      input.value = '';
+      return;
     }
+    if (file.size <= 0 || file.size > MAX_NEWS_IMAGE_UPLOAD_BYTES) {
+      setFormError('L’image est vide ou dépasse la limite de 8 Mo.');
+      input.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => {
+      setFormError('La lecture de l’image a échoué. Réessayez avec un autre fichier.');
+      input.value = '';
+    };
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') {
+        setFormError('La lecture de l’image a échoué.');
+        input.value = '';
+        return;
+      }
+
+      const image = new Image();
+      image.onerror = () => {
+        setFormError('Le fichier sélectionné ne peut pas être décodé comme image.');
+        input.value = '';
+      };
+      image.onload = () => {
+        const canvas = document.createElement('canvas');
+        const scale = Math.min(1, 800 / image.naturalWidth, 800 / image.naturalHeight);
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        const context = canvas.getContext('2d');
+        if (!context) {
+          setFormError('Le navigateur ne peut pas préparer cette image.');
+          input.value = '';
+          return;
+        }
+
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+        if (dataUrl.length > MAX_NEWS_IMAGE_DATA_URL_LENGTH) {
+          setFormError('L’image compressée reste trop volumineuse. Choisissez une image plus petite.');
+          input.value = '';
+          return;
+        }
+        setFormData((current) => ({ ...current, image: dataUrl }));
+        setFormError('');
+        input.value = '';
+      };
+      image.src = reader.result;
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    const normalized = normalizeNewsDraft(formData);
+    const validationError = validateNewsDraft(normalized);
+    if (validationError) {
+      setFormError(validationError);
+      setActiveTab('edit');
+      return;
+    }
+    setFormError('');
+    onSave(normalized);
   };
 
   // --- Toolbar config for ReactQuill ---
@@ -137,7 +166,7 @@ const NewsFormModal: React.FC<NewsFormModalProps> = ({ isOpen, onClose, onSave, 
                                     )}
                                     <div className="prose prose-slate max-w-none text-slate-600 text-sm">
                                         {formData.content ? (
-                                            <div dangerouslySetInnerHTML={{ __html: formData.content }} />
+                                            <div dangerouslySetInnerHTML={{ __html: sanitizeNewsHtml(formData.content) }} />
                                         ) : (
                                             <p className="italic text-slate-400 font-mono text-xs uppercase tracking-widest">Aucun contenu...</p>
                                         )}
@@ -157,8 +186,9 @@ const NewsFormModal: React.FC<NewsFormModalProps> = ({ isOpen, onClose, onSave, 
                                                     <NewspaperIcon className="h-3.5 w-3.5 text-slate-400" />
                                                 </div>
                                                 <input 
-                                                    type="text" 
+                                                    type="text"
                                                     required
+                                                    maxLength={MAX_NEWS_TITLE_LENGTH}
                                                     className="w-full pl-9 px-3 py-2 border border-slate-300 focus:border-slate-900 outline-none text-xs text-slate-900 bg-white placeholder-slate-400 font-bold uppercase tracking-tight"
                                                     value={formData.title || ''}
                                                     onChange={e => setFormData({...formData, title: e.target.value})}
@@ -219,9 +249,12 @@ const NewsFormModal: React.FC<NewsFormModalProps> = ({ isOpen, onClose, onSave, 
                                                     onChange={e => setFormData({...formData, image: e.target.value})}
                                                     placeholder="HTTPS://..."
                                                 />
+                                                {formData.image && !isAllowedNewsImageUrl(formData.image) && (
+                                                    <p role="alert" className="text-[10px] text-red-700">Lien d’image non valide : utilisez HTTPS ou importez un fichier image.</p>
+                                                )}
                                                 <label className="block w-full text-center px-2 py-1.5 border border-slate-300 border-dashed text-[9px] font-bold uppercase tracking-widest text-slate-500 cursor-pointer hover:bg-slate-100">
                                                     <ArrowUpTrayIcon className="w-3 h-3 inline mr-1" /> Uploader
-                                                    <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                                                    <input type="file" className="hidden" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleImageUpload} />
                                                 </label>
                                             </div>
                                         </div>
@@ -240,14 +273,11 @@ const NewsFormModal: React.FC<NewsFormModalProps> = ({ isOpen, onClose, onSave, 
                                                         onChange={e => setFormData({...formData, category: e.target.value})}
                                                     >
                                                         <option value="">SÉLECTIONNER...</option>
-                                                        <option value="Annonce">ANNONCE</option>
-                                                        <option value="Blog">BLOG DU DIRECTEUR</option>
-                                                        <option value="Déclaration">DÉCLARATION</option>
-                                                        <option value="Événement">ÉVÉNEMENT</option>
-                                                        <option value="International">INTERNATIONAL</option>
-                                                        <option value="Juridique">JURIDIQUE</option>
-                                                        <option value="Formation">FORMATION</option>
-                                                        <option value="Innovation">INNOVATION</option>
+                                                        {NEWS_CATEGORIES.map((category) => (
+                                                            <option key={category} value={category}>
+                                                                {category === 'Blog' ? 'BLOG DU DIRECTEUR' : category.toUpperCase()}
+                                                            </option>
+                                                        ))}
                                                     </select>
                                                 </div>
                                             </div>
@@ -271,8 +301,9 @@ const NewsFormModal: React.FC<NewsFormModalProps> = ({ isOpen, onClose, onSave, 
 
                                             <div>
                                                 <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1.5 tracking-wide">Description courte</label>
-                                                <textarea 
+                                                <textarea
                                                     required
+                                                    maxLength={MAX_NEWS_DESCRIPTION_LENGTH}
                                                     rows={3}
                                                     className="w-full px-3 py-2 border border-slate-300 text-[10px] font-medium text-slate-700 bg-white outline-none focus:border-slate-900 resize-none placeholder-slate-400"
                                                     value={formData.description || ''}
@@ -301,6 +332,8 @@ const NewsFormModal: React.FC<NewsFormModalProps> = ({ isOpen, onClose, onSave, 
                             </div>
                         )}
                     </div>
+
+                    {formError && <p role="alert" className="px-6 py-2 text-xs text-red-700 bg-red-50 border-t border-red-100">{formError}</p>}
 
                     <div className="px-6 py-4 border-t border-slate-200 flex justify-end space-x-3 bg-slate-50 flex-shrink-0">
                         <button 

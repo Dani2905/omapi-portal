@@ -51,7 +51,6 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
       case 'forms': return 'Gestion Documentaire';
       case 'formations': return 'Catalogue de Formations';
       case 'users': return 'Gestion des Utilisateurs';
-      case 'home-scam': return 'Alerte Arnaques (Accueil)';
       case 'home-resources': return 'Ressources Vedettes (Accueil)';
       default: return 'Tableau de bord';
     }

@@ -32,20 +32,16 @@ export interface Announcement {
   isActive: boolean;
 }
 
-export interface HomeScamConfig {
-  title: string;
-  subtitle: string;
-  description: string;
-}
-
 export interface HomeResourcesConfig {
   omapiHourTitle: string;
   omapiHourDesc: string;
   omapiHourThumbnail?: string;
+  omapiHourUrl?: string;
   videoTitle: string;
   videoDesc: string;
   videoThumbnail: string;
-  videoDuration: string;
+  videoDuration?: string;
+  videoUrl?: string;
 }
 
 export interface SiteConfig {
@@ -81,6 +77,7 @@ export interface LegislationItem {
   date: string;
   description: string;
   fileUrl: string;
+  fileName?: string;
 }
 
 export interface GopiItem {
@@ -199,7 +196,9 @@ export interface JobApplication {
   phone: string;
   message?: string;
   cvUrl: string; // URL of the uploaded CV
+  cvFileName?: string;
   coverLetterUrl?: string; // URL of the uploaded Cover Letter
+  coverLetterFileName?: string;
   applicationDate: string;
   status: 'Nouvelle' | 'En cours' | 'Rejetée' | 'Acceptée';
 }

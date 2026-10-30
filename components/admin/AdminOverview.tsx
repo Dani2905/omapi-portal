@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { ArrowRight, BriefcaseBusiness, FileText, Bell, Scale } from 'lucide-react';
 import { 
   NewspaperIcon, 
   CalendarIcon, 
@@ -21,6 +22,14 @@ const AdminOverview: React.FC<AdminOverviewProps> = ({ data, openModal, setActiv
   const gopiCount = data.gopiItems?.length || 0;
   const pendingOrders = data.gopiOrders?.filter((o: any) => o.status === 'En attente').length || 0;
   const totalFormationRegs = data.formationRegistrations?.length || 0;
+  const eventRegistrationsCount = data.eventRegistrations?.length || 0;
+  const openJobsCount = data.jobs?.filter((job: any) => job.status === 'Ouvert').length || 0;
+  const newApplicationsCount = data.jobApplications?.filter((application: any) => application.status === 'Nouvelle').length || 0;
+  const activeAnnouncementsCount = data.announcements?.filter((announcement: any) => announcement.isActive).length || 0;
+  const featuredNewsCount = data.newsItems?.filter((item: any) => item.featured).length || 0;
+  const documentCount = (data.forms?.length || 0) + (data.guides?.length || 0);
+  const legislationCount = data.legislationItems?.length || 0;
+  const unreadNotificationsCount = data.systemNotifications?.filter((notification: any) => !notification.read).length || 0;
 
   // Recent items logic
   const recentNews = [...(data.newsItems || [])].sort((a: any, b: any) => b.id - a.id).slice(0, 3);
@@ -28,7 +37,6 @@ const AdminOverview: React.FC<AdminOverviewProps> = ({ data, openModal, setActiv
     .filter((e: any) => e.status === 'À venir')
     .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .slice(0, 3);
-
   const parseEventDate = (dateStr: string) => {
     try {
       if (!dateStr) return { day: '', month: '' };
@@ -68,6 +76,7 @@ const AdminOverview: React.FC<AdminOverviewProps> = ({ data, openModal, setActiv
            <div>
               <p className="text-sm font-medium text-gray-500">Actualités</p>
               <p className="text-3xl font-bold text-gray-900 mt-2">{newsCount}</p>
+              <p className="mt-2 text-xs text-gray-400">{featuredNewsCount} à la une</p>
            </div>
            <div className="bg-blue-50 p-3 rounded-xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
               <NewspaperIcon className="w-6 h-6" />
@@ -120,6 +129,15 @@ const AdminOverview: React.FC<AdminOverviewProps> = ({ data, openModal, setActiv
         </div>
       </div>
 
+      {/* Operational summary */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5" aria-label="Indicateurs opérationnels">
+        <MiniStat icon={BriefcaseBusiness} label="Offres d’emploi ouvertes" value={openJobsCount} hint="Voir les offres" onClick={() => setActiveTab('jobs')} tone="blue" />
+        <MiniStat icon={UsersIcon} label="Nouvelles candidatures" value={newApplicationsCount} hint="À examiner" onClick={() => setActiveTab('job_applications')} tone="amber" />
+        <MiniStat icon={CalendarIcon} label="Inscriptions événements" value={eventRegistrationsCount} hint="Toutes les inscriptions" onClick={() => setActiveTab('events')} tone="purple" />
+        <MiniStat icon={FileText} label="Formulaires & guides" value={documentCount} hint="Bibliothèque documentaire" onClick={() => setActiveTab('forms')} tone="green" />
+        <MiniStat icon={Scale} label="Textes de législation" value={legislationCount} hint="Lois, ordonnances, décrets" onClick={() => setActiveTab('legislation')} tone="purple" />
+      </div>
+
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <button 
@@ -152,6 +170,23 @@ const AdminOverview: React.FC<AdminOverviewProps> = ({ data, openModal, setActiv
               </div>
               <span className="text-sm font-semibold">Publier une GOPI</span>
           </button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6">
+        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm" aria-labelledby="follow-up-title">
+          <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+            <div><h3 id="follow-up-title" className="text-sm font-bold text-gray-900">À suivre dans l’administration</h3><p className="mt-1 text-xs text-gray-500">Raccourcis vers les éléments qui demandent une vérification.</p></div>
+            <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700"><Bell className="mr-1 inline h-3.5 w-3.5" />{unreadNotificationsCount} non lue(s)</span>
+          </div>
+          <div className="divide-y divide-gray-100">
+            <FollowUpRow label="Commandes GOPI en attente" detail="Vérifier le paiement et mettre à jour leur statut." count={pendingOrders} onClick={() => setActiveTab('gopi')} tone="amber" />
+            <FollowUpRow label="Nouvelles candidatures" detail="Examiner les dossiers reçus sur le portail." count={newApplicationsCount} onClick={() => setActiveTab('job_applications')} tone="blue" />
+            <FollowUpRow label="Inscriptions aux formations" detail="Consulter les personnes inscrites et préparer le suivi." count={totalFormationRegs} onClick={() => setActiveTab('formations')} tone="purple" />
+            <FollowUpRow label="Annonces actives" detail="Vérifier les informations visibles dans le bandeau d’accueil." count={activeAnnouncementsCount} onClick={() => setActiveTab('announcement')} tone="green" />
+          </div>
+          <p className="border-t border-gray-100 px-6 py-3 text-[11px] text-gray-500">Les notifications détaillées s’ouvrent depuis l’icône cloche de la barre supérieure.</p>
+        </section>
+
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -230,5 +265,25 @@ const AdminOverview: React.FC<AdminOverviewProps> = ({ data, openModal, setActiv
     </div>
   );
 };
+
+function MiniStat({ icon: Icon, label, value, hint, onClick, tone }: { icon: React.ElementType; label: string; value: number; hint: string; onClick: () => void; tone: 'blue' | 'amber' | 'purple' | 'green' }) {
+  const tones = {
+    blue: 'bg-blue-50 text-blue-700',
+    amber: 'bg-amber-50 text-amber-700',
+    purple: 'bg-purple-50 text-purple-700',
+    green: 'bg-emerald-50 text-emerald-700',
+  };
+  return <button type="button" onClick={onClick} className="group flex items-center justify-between rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"><span><span className="block text-xs font-medium text-gray-500">{label}</span><span className="mt-1 block text-2xl font-extrabold text-gray-900">{value}</span><span className="mt-1 block text-[11px] text-gray-400">{hint}</span></span><span className={`rounded-xl p-3 transition-colors group-hover:bg-blue-600 group-hover:text-white ${tones[tone]}`}><Icon className="h-5 w-5" /></span></button>;
+}
+
+function FollowUpRow({ label, detail, count, onClick, tone }: { label: string; detail: string; count: number; onClick: () => void; tone: 'amber' | 'blue' | 'purple' | 'green' }) {
+  const tones = {
+    amber: count > 0 ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-500',
+    blue: count > 0 ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-500',
+    purple: count > 0 ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-500',
+    green: count > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-500',
+  };
+  return <button type="button" onClick={onClick} className="flex w-full items-center gap-3 px-6 py-4 text-left transition-colors hover:bg-gray-50"><span className={`flex h-9 min-w-9 items-center justify-center rounded-full px-2 text-xs font-extrabold ${tones[tone]}`}>{count}</span><span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-gray-800">{label}</span><span className="mt-0.5 block text-xs text-gray-500">{detail}</span></span><ArrowRight className="h-4 w-4 shrink-0 text-gray-300" /></button>;
+}
 
 export default AdminOverview;

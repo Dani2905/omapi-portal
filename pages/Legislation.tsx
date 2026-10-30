@@ -5,6 +5,7 @@ import Breadcrumb from '../components/Breadcrumb';
 import { DEFAULT_LEGISLATION } from '../constants';
 import { LegislationItem } from '../types';
 import { useCrud } from '../hooks/useCrud';
+import { isAllowedLegislationUrl } from '../utils/legislationLogic';
 
 // --- Icons ---
 const ScaleIcon = ({ className }: { className?: string }) => (
@@ -42,6 +43,7 @@ const Legislation: React.FC = () => {
 
   const fundamentalTexts = legislationItems.filter(item => item.category === 'Fondamental');
   const applicationTexts = legislationItems.filter(item => item.category === 'Application');
+  const otherTexts = legislationItems.filter(item => item.category === 'Autre');
 
   const renderTextItem = (item: LegislationItem) => (
     <div key={item.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
@@ -68,16 +70,20 @@ const Legislation: React.FC = () => {
         {item.description}
       </p>
       
-      <a 
-        href={item.fileUrl} 
-        target="_blank" 
-        rel="noopener noreferrer"
-        download={item.fileUrl?.startsWith('data:') ? 'document_legislation' : undefined}
-        className="inline-flex items-center text-primary font-bold text-sm hover:underline"
-      >
-        <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
-        Télécharger
-      </a>
+      {isAllowedLegislationUrl(item.fileUrl) ? (
+        <a
+          href={item.fileUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          download={item.fileUrl?.startsWith('data:') ? item.fileName || 'document-legislation.pdf' : undefined}
+          className="inline-flex items-center text-primary font-bold text-sm hover:underline"
+        >
+          <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
+          Télécharger le PDF
+        </a>
+      ) : (
+        <span className="text-sm text-slate-400">Document non disponible</span>
+      )}
     </div>
   );
 
@@ -126,6 +132,15 @@ const Legislation: React.FC = () => {
                 <h2 className="text-xl font-bold text-gray-800 mb-6 border-b border-gray-200 pb-2">Textes d'Application</h2>
                 <div className="grid gap-6">
                   {applicationTexts.map(renderTextItem)}
+                </div>
+              </section>
+            )}
+
+            {otherTexts.length > 0 && (
+              <section>
+                <h2 className="text-xl font-bold text-gray-800 mb-6 border-b border-gray-200 pb-2">Autres textes</h2>
+                <div className="grid gap-6">
+                  {otherTexts.map(renderTextItem)}
                 </div>
               </section>
             )}

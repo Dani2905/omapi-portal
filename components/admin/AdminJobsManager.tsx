@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Pencil, Trash2, Plus } from 'lucide-react';
 import { JobOffer } from '../../types';
+import { getJobAvailabilityLabel } from '../../utils/jobLogic';
 
 interface AdminJobsManagerProps {
   jobs: JobOffer[];
@@ -12,10 +13,12 @@ interface AdminJobsManagerProps {
 const AdminJobsManager: React.FC<AdminJobsManagerProps> = ({ jobs, onEdit, onDelete, onAdd }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredJobs = jobs.filter(job => 
-    job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    job.department.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const normalizedSearch = searchTerm.trim().toLocaleLowerCase();
+  const filteredJobs = jobs.filter((job): job is JobOffer => Boolean(job && typeof job === 'object')).filter(job => {
+    const title = typeof job.title === 'string' ? job.title : '';
+    const department = typeof job.department === 'string' ? job.department : '';
+    return title.toLocaleLowerCase().includes(normalizedSearch) || department.toLocaleLowerCase().includes(normalizedSearch);
+  });
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -59,19 +62,23 @@ const AdminJobsManager: React.FC<AdminJobsManagerProps> = ({ jobs, onEdit, onDel
               filteredJobs.map((job) => (
                 <tr key={job.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                   <td className="p-4">
-                    <div className="font-semibold text-gray-800">{job.title}</div>
-                    <div className="text-xs text-gray-500 mt-1">{job.location} • Exp. {job.experience}</div>
+                    <div className="font-semibold text-gray-800">{job.title || 'Offre sans titre'}</div>
+                    <div className="text-xs text-gray-500 mt-1">{job.location || 'Lieu non renseigné'} • Exp. {job.experience || '—'}</div>
                   </td>
-                  <td className="p-4 text-gray-600">{job.department}</td>
+                  <td className="p-4 text-gray-600">{job.department || '—'}</td>
                   <td className="p-4 text-gray-600">
                     <span className="inline-block px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-md">
                         {job.type}
                     </span>
                   </td>
                   <td className="p-4">
-                    <span className={`inline-block px-2 py-1 text-xs rounded-md font-medium ${job.status === 'Ouvert' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                      {job.status}
-                    </span>
+                    {(() => {
+                      const availability = getJobAvailabilityLabel(job);
+                      const isActuallyOpen = availability === 'Ouvert';
+                      return <span className={`inline-block px-2 py-1 text-xs rounded-md font-medium ${isActuallyOpen ? 'bg-green-100 text-green-700' : availability === 'À venir' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
+                        {availability}
+                      </span>;
+                    })()}
                   </td>
                   <td className="p-4">
                     <div className="flex items-center justify-center space-x-2">

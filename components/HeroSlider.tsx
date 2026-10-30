@@ -6,32 +6,25 @@ import { NewsItem, Slide } from '../types';
 import { LATEST_NEWS } from '../data/mocks/news';
 import { SLIDES } from '../constants';
 import { useCrud } from '../hooks/useCrud';
+import { buildEditorialSlides } from '../utils/editorialLogic';
 
 const HeroSlider: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const { items: newsItems } = useCrud<NewsItem>('omapi_news', LATEST_NEWS);
   const { items: managedSlides } = useCrud<Slide>('omapi_slides', SLIDES);
   
-  // Filter for featured news to show in the slider
-  const featuredNewsSlides: Slide[] = newsItems
-    .filter(item => item.featured)
-    .map((item: NewsItem): Slide => ({
-        id: item.id + 1000, // Ensure unique ID
-        image: item.image,
-        title: item.title,
-        subtitle: item.description,
-        ctaText: 'Lire l\'actualité',
-        ctaLink: `/news/${item.id}`,
-        newsId: item.id
-    }));
-
-  const slides = [...managedSlides, ...featuredNewsSlides];
+  // Les actualités à la une sont générées une seule fois depuis leur fiche.
+  const slides = buildEditorialSlides(managedSlides, newsItems);
 
   useEffect(() => {
-    if (slides.length === 0) return;
+    if (slides.length === 0) {
+      setCurrentSlide(0);
+      return undefined;
+    }
+    setCurrentSlide((current) => current % slides.length);
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % slides.length);
-    }, 8000); // 8s
+    }, 8000);
     return () => clearInterval(timer);
   }, [slides.length]);
 
@@ -41,13 +34,14 @@ const HeroSlider: React.FC = () => {
     return <div className="h-[400px] bg-gray-100 flex items-center justify-center text-gray-500 font-bold">Aucun contenu à afficher</div>;
   }
 
-  const activeSlide = slides[currentSlide];
+  const safeCurrentSlide = currentSlide % slides.length;
+  const activeSlide = slides[safeCurrentSlide];
 
   return (
     <div className="relative h-[500px] lg:h-[600px] w-full bg-gray-100 group font-sans overflow-hidden">
       <AnimatePresence mode="wait">
         <motion.div
-          key={activeSlide.id}
+          key={activeSlide.newsId !== undefined ? `news-${activeSlide.newsId}` : `slide-${activeSlide.id}`}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -126,7 +120,7 @@ const HeroSlider: React.FC = () => {
             key={index}
             onClick={() => goToSlide(index)}
             className={`h-2.5 transition-all duration-300 ${
-              index === currentSlide ? 'bg-white w-12' : 'bg-white/40 w-8 hover:bg-white/80'
+              index === safeCurrentSlide ? 'bg-white w-12' : 'bg-white/40 w-8 hover:bg-white/80'
             }`}
             aria-label={`Go to slide ${index + 1}`}
           />
@@ -135,13 +129,13 @@ const HeroSlider: React.FC = () => {
       
       {/* Navigation Arrows */}
       <button 
-        onClick={() => setCurrentSlide((currentSlide - 1 + slides.length) % slides.length)}
+        onClick={() => setCurrentSlide((current) => (current - 1 + slides.length) % slides.length)}
         className="absolute left-4 top-1/2 -translate-y-1/2 z-30 w-12 h-16 bg-black/40 hover:bg-black/80 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all duration-300"
       >
         <i className="fas fa-chevron-left fa-lg"></i>
       </button>
       <button 
-        onClick={() => setCurrentSlide((currentSlide + 1) % slides.length)}
+        onClick={() => setCurrentSlide((current) => (current + 1) % slides.length)}
         className="absolute right-4 top-1/2 -translate-y-1/2 z-30 w-12 h-16 bg-black/40 hover:bg-black/80 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all duration-300"
       >
         <i className="fas fa-chevron-right fa-lg"></i>

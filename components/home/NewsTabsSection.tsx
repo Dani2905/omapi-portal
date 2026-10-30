@@ -6,44 +6,35 @@ import { ArrowRightIcon, NewspaperIcon, ChatBubbleLeftRightIcon, DocumentTextIco
 import { useCrud } from '../../hooks/useCrud';
 import { NewsItem } from '../../types';
 import { LATEST_NEWS } from '../../data/mocks/news';
+import { getHomepageNewsSection, sortNewsItems } from '../../utils/editorialLogic';
 
 const NewsTabsSection: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'news' | 'blog' | 'remarks'>('news');
   const { items: newsItems } = useCrud<NewsItem>('omapi_news', LATEST_NEWS);
 
-  // Filter news items for the tabs
-  const newsTabItems = newsItems
-    .filter(n => !n.category || n.category === 'Annonce' || n.category === 'Événement' || n.category === 'Actualité')
+  // Tous les contenus restent visibles : seuls Blog et Déclaration ont
+  // des onglets dédiés, les autres catégories appartiennent aux actualités.
+  const orderedNewsItems = sortNewsItems(newsItems);
+  const toCard = (news: NewsItem) => ({
+    id: news.id,
+    title: news.title,
+    date: news.date,
+    link: `/news/${news.id}`,
+    image: news.image,
+    description: news.description,
+  });
+  const newsTabItems = orderedNewsItems
+    .filter((news) => getHomepageNewsSection(news.category) === 'news')
     .slice(0, 4)
-    .map(n => ({ 
-      title: n.title, 
-      date: n.date, 
-      link: `/news/${n.id}`,
-      image: n.image,
-      description: n.description
-    }));
-
-  const blogTabItems = newsItems
-    .filter(n => n.category === 'Blog')
+    .map(toCard);
+  const blogTabItems = orderedNewsItems
+    .filter((news) => getHomepageNewsSection(news.category) === 'blog')
     .slice(0, 4)
-    .map(n => ({ 
-      title: n.title, 
-      date: n.date, 
-      link: `/news/${n.id}`,
-      image: n.image,
-      description: n.description
-    }));
-
-  const remarksTabItems = newsItems
-    .filter(n => n.category === 'Déclaration')
+    .map(toCard);
+  const remarksTabItems = orderedNewsItems
+    .filter((news) => getHomepageNewsSection(news.category) === 'remarks')
     .slice(0, 4)
-    .map(n => ({ 
-      title: n.title, 
-      date: n.date, 
-      link: `/news/${n.id}`,
-      image: n.image,
-      description: n.description
-    }));
+    .map(toCard);
 
   const content = {
     news: newsTabItems,
@@ -61,9 +52,9 @@ const NewsTabsSection: React.FC = () => {
         transition={{ duration: 0.3, ease: "easeOut" }}
         className="grid grid-cols-1 md:grid-cols-2 gap-8"
       >
-        {items.length > 0 ? items.map((item, idx) => (
+        {items.length > 0 ? items.map((item) => (
           <motion.div
-            key={idx}
+            key={item.id}
             whileHover={{ y: -4 }}
             transition={{ duration: 0.2 }}
           >

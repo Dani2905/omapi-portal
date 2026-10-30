@@ -5,9 +5,11 @@ import Breadcrumb from '../components/Breadcrumb';
 import { LATEST_NEWS } from '../data/mocks/news';
 import { NewsItem } from '../types';
 import { useCrud } from '../hooks/useCrud';
+import { sortNewsItems } from '../utils/editorialLogic';
 
 const News: React.FC = () => {
   const { items: newsList } = useCrud<NewsItem>('omapi_news', LATEST_NEWS);
+  const orderedNewsList = sortNewsItems(newsList);
 
   return (
     <div className="bg-gray-50 min-h-screen pb-16">
@@ -22,14 +24,19 @@ const News: React.FC = () => {
 
         {newsList.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {newsList.map((actu) => (
+                {orderedNewsList.map((actu) => (
                     <article key={actu.id} className="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 group flex flex-col h-full">
-                        <Link to={`/news/${actu.id}`} className="relative h-48 overflow-hidden block">
-                            <img 
-                                src={actu.image} 
-                                alt={actu.title} 
-                                className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500"
-                            />
+                        <Link to={`/news/${actu.id}`} className="relative h-48 overflow-hidden block bg-slate-100">
+                            {actu.image ? (
+                                <img
+                                    src={actu.image}
+                                    alt={actu.title}
+                                    className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500"
+                                    onError={(event) => { event.currentTarget.style.display = 'none'; }}
+                                />
+                            ) : (
+                                <div className="flex h-full items-center justify-center text-xs font-semibold uppercase tracking-widest text-slate-400">Image non disponible</div>
+                            )}
                             <span className="absolute top-3 left-3 bg-primary text-white px-3 py-1 rounded-md text-xs font-semibold">
                                 {actu.category}
                             </span>

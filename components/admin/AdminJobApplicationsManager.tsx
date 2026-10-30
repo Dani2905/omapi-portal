@@ -1,15 +1,52 @@
 import React, { useState } from 'react';
 import { JobApplication } from '../../types';
-import { DocumentTextIcon, CheckIcon, XMarkIcon, EyeIcon, CalendarIcon, BriefcaseIcon } from './AdminIcons';
+import { DocumentTextIcon, XMarkIcon, EyeIcon, CalendarIcon, BriefcaseIcon } from './AdminIcons';
+import { isSafeApplicationFileUrl, normalizeApplicantFileName, normalizeJobApplicationRecord } from '../../utils/jobLogic';
 
 interface AdminJobApplicationsManagerProps {
   applications: JobApplication[];
-  onUpdateStatus: (application: JobApplication, status: JobApplication['status']) => void;
+  onUpdateStatus: (application: JobApplication, status: JobApplication['status']) => void | boolean | Promise<void | boolean>;
   onDelete: (id: number) => void;
 }
 
 const AdminJobApplicationsManager: React.FC<AdminJobApplicationsManagerProps> = ({ applications, onUpdateStatus, onDelete }) => {
   const [selectedApp, setSelectedApp] = useState<JobApplication | null>(null);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<JobApplication['status'] | null>(null);
+  const [statusError, setStatusError] = useState('');
+  const safeApplications = (Array.isArray(applications) ? applications : [])
+    .map(normalizeJobApplicationRecord)
+    .filter((application): application is JobApplication => application !== null)
+    .sort((left, right) => {
+      const leftTime = new Date(left.applicationDate).getTime();
+      const rightTime = new Date(right.applicationDate).getTime();
+      return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
+    });
+
+  const formatDate = (value: string, withTime = false) => {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 'Date inconnue' : date.toLocaleString('fr-FR', withTime ? undefined : { dateStyle: 'short' });
+  };
+
+  const updateStatus = async (status: JobApplication['status']) => {
+    if (!selectedApp || status === selectedApp.status || isUpdatingStatus) return;
+    setIsUpdatingStatus(true);
+    setPendingStatus(status);
+    setStatusError('');
+    try {
+      const saved = await onUpdateStatus(selectedApp, status);
+      if (saved === false) {
+        setStatusError("Le nouveau statut n'a pas pu être enregistré.");
+        return;
+      }
+      setSelectedApp((current) => current ? { ...current, status } : current);
+    } catch {
+      setStatusError("Une erreur est survenue lors de la mise à jour du statut.");
+    } finally {
+      setIsUpdatingStatus(false);
+      setPendingStatus(null);
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -40,7 +77,7 @@ const AdminJobApplicationsManager: React.FC<AdminJobApplicationsManagerProps> = 
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {applications.length > 0 ? applications.map((app) => (
+              {safeApplications.length > 0 ? safeApplications.map((app) => (
                 <tr key={app.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="font-semibold text-gray-900">{app.firstName} {app.lastName}</div>
@@ -52,7 +89,7 @@ const AdminJobApplicationsManager: React.FC<AdminJobApplicationsManagerProps> = 
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     <div className="flex items-center">
                       <CalendarIcon className="w-4 h-4 mr-1 text-gray-400" />
-                      {new Date(app.applicationDate).toLocaleDateString('fr-FR')}
+                      {formatDate(app.applicationDate)}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -96,7 +133,7 @@ const AdminJobApplicationsManager: React.FC<AdminJobApplicationsManagerProps> = 
             <div className="p-6 overflow-y-auto">
               <div className="flex items-center space-x-4 mb-6 pb-6 border-b border-gray-100">
                  <div className="h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 text-2xl font-bold">
-                    {selectedApp.firstName.charAt(0)}{selectedApp.lastName.charAt(0)}
+                    {String(selectedApp.firstName || '?').charAt(0)}{String(selectedApp.lastName || '?').charAt(0)}
                  </div>
                  <div>
                    <h4 className="text-xl font-bold text-gray-900">{selectedApp.firstName} {selectedApp.lastName}</h4>
@@ -104,7 +141,7 @@ const AdminJobApplicationsManager: React.FC<AdminJobApplicationsManagerProps> = 
                  </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-6 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
                 <div>
                   <h5 className="text-sm font-semibold text-gray-500 uppercase mb-1">Poste visé</h5>
                   <p className="font-medium text-gray-900 flex items-center">
@@ -116,7 +153,7 @@ const AdminJobApplicationsManager: React.FC<AdminJobApplicationsManagerProps> = 
                   <h5 className="text-sm font-semibold text-gray-500 uppercase mb-1">Date de candidature</h5>
                   <p className="font-medium text-gray-900 flex items-center">
                     <CalendarIcon className="w-4 h-4 mr-2 text-gray-400" />
-                    {new Date(selectedApp.applicationDate).toLocaleString('fr-FR')}
+                    {formatDate(selectedApp.applicationDate, true)}
                   </p>
                 </div>
               </div>
@@ -130,33 +167,28 @@ const AdminJobApplicationsManager: React.FC<AdminJobApplicationsManagerProps> = 
 
               <div className="mb-8">
                 <h5 className="text-sm font-semibold text-gray-500 uppercase mb-2">Documents</h5>
-                <div className="flex gap-4">
-                  <a href={selectedApp.cvUrl} download={`CV_${selectedApp.firstName}_${selectedApp.lastName}.pdf`} target="_blank" rel="noopener noreferrer" className="flex items-center px-4 py-2 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors">
-                    <DocumentTextIcon className="w-5 h-5 mr-2" />
-                    Télécharger le CV
-                  </a>
-                  {selectedApp.coverLetterUrl && (
-                    <a href={selectedApp.coverLetterUrl} download={`Lettre_${selectedApp.firstName}_${selectedApp.lastName}.pdf`} target="_blank" rel="noopener noreferrer" className="flex items-center px-4 py-2 bg-gray-50 text-gray-700 border border-gray-200 rounded hover:bg-gray-100 transition-colors">
-                      <DocumentTextIcon className="w-5 h-5 mr-2" />
-                      Télécharger la lettre
+                <div className="flex flex-wrap gap-4">
+                  {isSafeApplicationFileUrl(selectedApp.cvUrl) ? (
+                    <a href={selectedApp.cvUrl} download={normalizeApplicantFileName(selectedApp.cvFileName, `CV_${selectedApp.firstName}_${selectedApp.lastName}.pdf`)} className="flex items-center px-4 py-2 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors">
+                      <DocumentTextIcon className="w-5 h-5 mr-2" />Télécharger le CV
                     </a>
-                  )}
+                  ) : <span className="text-sm text-gray-500">CV indisponible ou invalide</span>}
+                  {selectedApp.coverLetterUrl && (isSafeApplicationFileUrl(selectedApp.coverLetterUrl) ? (
+                    <a href={selectedApp.coverLetterUrl} download={normalizeApplicantFileName(selectedApp.coverLetterFileName, `Lettre_${selectedApp.firstName}_${selectedApp.lastName}.pdf`)} className="flex items-center px-4 py-2 bg-gray-50 text-gray-700 border border-gray-200 rounded hover:bg-gray-100 transition-colors">
+                      <DocumentTextIcon className="w-5 h-5 mr-2" />Télécharger la lettre
+                    </a>
+                  ) : <span className="text-sm text-gray-500">Lettre indisponible ou invalide</span>)}
                 </div>
               </div>
 
               <div className="border-t border-gray-100 pt-6">
                  <h5 className="text-sm font-semibold text-gray-500 uppercase mb-3">Mettre à jour le statut</h5>
+                 {statusError && <p role="alert" className="mb-3 text-sm text-red-700">{statusError}</p>}
                  <div className="flex flex-wrap gap-3">
-                   {['Nouvelle', 'En cours', 'Acceptée', 'Rejetée'].map(status => (
-                     <button
-                       key={status}
-                       onClick={() => {
-                         onUpdateStatus(selectedApp, status as any);
-                         setSelectedApp({...selectedApp, status: status as any});
-                       }}
-                       className={`px-4 py-2 rounded-full text-sm font-medium border ${selectedApp.status === status ? getStatusColor(status) : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-                     >
-                       {status}
+                   {(['Nouvelle', 'En cours', 'Acceptée', 'Rejetée'] as JobApplication['status'][]).map(status => (
+                     <button key={status} type="button" disabled={isUpdatingStatus || selectedApp.status === status} onClick={() => void updateStatus(status)}
+                       className={`px-4 py-2 rounded-full text-sm font-medium border disabled:cursor-not-allowed disabled:opacity-70 ${selectedApp.status === status ? getStatusColor(status) : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+                       {pendingStatus === status ? 'Enregistrement…' : status}
                      </button>
                    ))}
                  </div>

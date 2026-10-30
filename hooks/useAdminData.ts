@@ -5,7 +5,12 @@ import { SLIDES, DEFAULT_ANNOUNCEMENTS, DEFAULT_FORMS, DEFAULT_GUIDES, DEFAULT_F
 import { LATEST_NEWS } from '../data/mocks/news';
 import { describeCrudAction } from '../utils/notificationMessages';
 import { canTransitionGopiOrder, GOPI_PAYMENT_METHODS } from '../utils/gopiLogic';
-import { Slide, NewsItem, Announcement, Formulaire, Guide, Formation, FormationRegistration, User, JobOffer, JobApplication, GopiItem, GopiOrder, Event, EventRegistration, LegislationItem, Notification, SystemNotification, SiteConfig, HomeScamConfig, HomeResourcesConfig, ActivityLog } from '../types';
+import { normalizeAnnouncementDraft, validateAnnouncementText } from '../utils/announcementLogic';
+import { normalizeNewsDraft, validateNewsDraft } from '../utils/editorialLogic';
+import { JOB_STATUSES, normalizeJobOfferDraft, validateJobOfferDraft } from '../utils/jobLogic';
+import { normalizeEventDraft, normalizeEventRegistrationDraft, validateEventDraft, validateEventRegistrationDraft } from '../utils/eventLogic';
+import { DEFAULT_HOME_RESOURCES_CONFIG } from '../data/homeResources';
+import { Slide, NewsItem, Announcement, Formulaire, Guide, Formation, FormationRegistration, User, JobOffer, JobApplication, GopiItem, GopiOrder, Event, EventRegistration, LegislationItem, Notification, SystemNotification, SiteConfig, HomeResourcesConfig, ActivityLog } from '../types';
 
 const READ_NOTIFICATIONS_KEY = 'omapi_read_notifications';
 
@@ -71,6 +76,13 @@ export const useAdminData = () => {
     deleteItem: deleteSlide
   } = useCrud<Slide>('omapi_slides', SLIDES, addNotification);
 
+  // Nettoyer les anciennes copies de slides liées aux actualités : elles sont
+  // désormais générées directement depuis les articles à la une.
+  useEffect(() => {
+    if (!slides.some((slide) => slide.newsId !== undefined)) return;
+    setSlides((currentSlides) => currentSlides.filter((slide) => slide.newsId === undefined));
+  }, [slides, setSlides]);
+
   // 2. News
   const {
     items: newsItems,
@@ -79,11 +91,25 @@ export const useAdminData = () => {
   } = useCrud<NewsItem>('omapi_news', LATEST_NEWS, addNotification);
 
   // 3. Announcements (now CRUD)
-  const { 
-    items: announcements, 
-    saveItem: saveAnnouncement, 
-    deleteItem: deleteAnnouncement 
+  const {
+    items: announcements,
+    saveItem: saveAnnouncementBase,
+    deleteItem: deleteAnnouncement,
   } = useCrud<Announcement>('omapi_announcements', DEFAULT_ANNOUNCEMENTS, addNotification);
+
+  const saveAnnouncement = async (draft: Partial<Announcement>): Promise<boolean> => {
+    const normalized = normalizeAnnouncementDraft(draft);
+    const textError = validateAnnouncementText(normalized.text);
+    if (textError) {
+      addNotification(textError, 'error');
+      return false;
+    }
+    if (typeof normalized.isActive !== 'boolean') {
+      addNotification('Choisissez si le message doit être actif ou inactif.', 'error');
+      return false;
+    }
+    return saveAnnouncementBase(normalized);
+  };
 
   // 4. Forms & Guides
   const { items: forms, saveItem: saveForm, deleteItem: deleteForm } = useCrud<Formulaire>('omapi_forms', DEFAULT_FORMS, addNotification);
@@ -203,12 +229,110 @@ export const useAdminData = () => {
   const { items: users, saveItem: saveUser, deleteItem: deleteUser } = useCrud<User>('omapi_users', DEFAULT_USERS, addNotification);
 
   // 7b. Jobs
-  const { items: jobs, saveItem: saveJob, deleteItem: deleteJob } = useCrud<JobOffer>('omapi_jobs', DEFAULT_JOBS, addNotification);
-  const { items: jobApplications, saveItem: saveJobApplication, deleteItem: deleteJobApplication } = useCrud<JobApplication>('omapi_job_applications', [], addNotification);
+  const { items: jobs, saveItem: persistJob, deleteItem: deleteJobRecord } = useCrud<JobOffer>('omapi_jobs', DEFAULT_JOBS, addNotification);
+  const { items: jobApplications, saveItem: persistJobApplication, deleteItem: deleteJobApplication } = useCrud<JobApplication>('omapi_job_applications', [], addNotification);
+
+  const saveJob = async (draft: Partial<JobOffer>) => {
+    const validationError = validateJobOfferDraft(draft);
+    if (validationError) {
+      addNotification(`Offre non enregistrée : ${validationError}`, 'error');
+      return false;
+    }
+    return persistJob(normalizeJobOfferDraft(draft));
+  };
+
+  const deleteJob = async (id: number | string) => {
+    try {
+      const rawApplications = localStorage.getItem('omapi_job_applications');
+      const currentApplications: JobApplication[] = rawApplications ? JSON.parse(rawApplications) : jobApplications;
+      const linkedCount = Array.isArray(currentApplications)
+        ? currentApplications.filter((application) => String(application.jobId) === String(id)).length
+        : 0;
+      if (linkedCount > 0) {
+        addNotification(`Suppression refusée : ${linkedCount} candidature(s) sont liées à cette offre. Fermez plutôt l’offre afin de préserver l’historique.`, 'error');
+        return false;
+      }
+    } catch {
+      addNotification('Suppression refusée : impossible de vérifier les candidatures liées à cette offre.', 'error');
+      return false;
+    }
+    return deleteJobRecord(id);
+  };
+
+  const saveJobApplication = async (application: Partial<JobApplication>) => {
+    if (application.id === undefined || application.id === null || application.status === undefined) {
+      addNotification('Mise à jour refusée : la candidature ou son nouveau statut est manquant.', 'error');
+      return false;
+    }
+    if (!['Nouvelle', 'En cours', 'Rejetée', 'Acceptée'].includes(application.status)) {
+      addNotification('Statut de candidature invalide : sélectionnez un statut reconnu.', 'error');
+      return false;
+    }
+
+    let currentApplications: unknown = jobApplications;
+    try {
+      const stored = localStorage.getItem('omapi_job_applications');
+      if (stored !== null) currentApplications = JSON.parse(stored);
+    } catch {
+      addNotification('Mise à jour refusée : impossible de vérifier la candidature enregistrée.', 'error');
+      return false;
+    }
+    if (!Array.isArray(currentApplications) || !currentApplications.some((item) => item && String(item.id) === String(application.id))) {
+      addNotification('Mise à jour refusée : cette candidature a été supprimée ou n’existe plus. Actualisez la liste.', 'error');
+      return false;
+    }
+    return persistJobApplication(application);
+  };
 
   // 8. Events & Registrations
-  const { items: events, saveItem: saveEvent, deleteItem: deleteEvent } = useCrud<Event>('omapi_events', DEFAULT_EVENTS, addNotification);
-  const { items: eventRegistrations, saveItem: saveEventRegistration, deleteItem: deleteEventRegistration } = useCrud<EventRegistration>('omapi_event_registrations', DEFAULT_EVENT_REGISTRATIONS, addNotification);
+  const { items: events, saveItem: persistEvent, deleteItem: deleteEventRecord } = useCrud<Event>('omapi_events', DEFAULT_EVENTS, addNotification);
+  const { items: eventRegistrations, saveItem: persistEventRegistration, deleteItem: deleteEventRegistration } = useCrud<EventRegistration>('omapi_event_registrations', DEFAULT_EVENT_REGISTRATIONS, addNotification);
+
+  const saveEvent = async (draft: Partial<Event>) => {
+    const validationError = validateEventDraft(draft);
+    if (validationError) {
+      addNotification(`Événement non enregistré : ${validationError}`, 'error');
+      return false;
+    }
+    return persistEvent(normalizeEventDraft(draft));
+  };
+
+  const deleteEvent = async (id: number | string) => {
+    try {
+      const rawRegistrations = localStorage.getItem('omapi_event_registrations');
+      const currentRegistrations: unknown = rawRegistrations === null ? eventRegistrations : JSON.parse(rawRegistrations);
+      if (!Array.isArray(currentRegistrations)) throw new Error('Invalid registration data');
+      const linkedCount = currentRegistrations.filter((registration) => registration && String(registration.eventId) === String(id)).length;
+      if (linkedCount > 0) {
+        addNotification(`Suppression refusée : ${linkedCount} inscription(s) sont liées à cet événement. Annulez l’événement ou supprimez d’abord ses participants afin de préserver l’historique.`, 'error');
+        return false;
+      }
+    } catch {
+      addNotification('Suppression refusée : impossible de vérifier les inscriptions liées à cet événement.', 'error');
+      return false;
+    }
+    return deleteEventRecord(id);
+  };
+
+  const saveEventRegistration = async (draft: Partial<EventRegistration>) => {
+    if (draft.eventId === undefined || draft.eventId === null) {
+      addNotification('Inscription refusée : événement manquant.', 'error');
+      return false;
+    }
+    const event = events.find((item) => String(item.id) === String(draft.eventId));
+    if (!event) {
+      addNotification('Inscription refusée : cet événement n’existe plus.', 'error');
+      return false;
+    }
+    const normalized = normalizeEventRegistrationDraft(draft);
+    const comparableRegistrations = eventRegistrations.filter((item) => String(item.id) !== String(draft.id));
+    const validationError = validateEventRegistrationDraft(normalized, event, comparableRegistrations);
+    if (validationError) {
+      addNotification(`Inscription refusée : ${validationError}`, 'error');
+      return false;
+    }
+    return persistEventRegistration(normalized);
+  };
 
   // 9. Legislation
   const { items: legislationItems, saveItem: saveLegislation, deleteItem: deleteLegislation } = useCrud<LegislationItem>('omapi_legislation', DEFAULT_LEGISLATION, addNotification);
@@ -216,82 +340,37 @@ export const useAdminData = () => {
   // 10. Site Configs
   const [siteConfig, saveSiteConfig] = useObjectStorage<SiteConfig>('omapi_site_config', {}, addNotification);
 
-  // 12. Home Page Configs (New)
-  const defaultScamConfig: HomeScamConfig = {
-      title: "Les arnaques augmentent",
-      subtitle: "Signes courants des escroqueries aux marques et brevets",
-      description: "Des entités non officielles envoient des factures trompeuses aux déposants de brevets et de marques. Apprenez à repérer ces fraudes et protégez vos droits de propriété intellectuelle."
-  };
-  const [homeScamConfig, saveHomeScamConfig] = useObjectStorage<HomeScamConfig>('omapi_home_scam', defaultScamConfig, addNotification);
-
-  const defaultResourcesConfig: HomeResourcesConfig = {
-      omapiHourTitle: "L'Heure OMAPI",
-      omapiHourDesc: "Rejoignez-nous mensuellement pour partager nos priorités et discuter des avancées de la propriété industrielle à Madagascar.",
-      omapiHourThumbnail: "https://images.unsplash.com/photo-1573164713988-8665fc963095?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80",
-      videoTitle: "Comment vérifier le statut de votre demande",
-      videoDesc: "Un guide vidéo rapide pour naviguer dans notre portail et suivre l'avancement de vos dépôts de marques en temps réel.",
-      videoThumbnail: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80",
-      videoDuration: "02:45"
-  };
-  const [homeResourcesConfig, saveHomeResourcesConfig] = useObjectStorage<HomeResourcesConfig>('omapi_home_resources', defaultResourcesConfig, addNotification);
+  const [homeResourcesConfig, saveHomeResourcesConfig] = useObjectStorage<HomeResourcesConfig>('omapi_home_resources', DEFAULT_HOME_RESOURCES_CONFIG, addNotification);
 
 
-  // Enregistrer une actualité et synchroniser son éventuelle diapositive
-  // dans le carrousel. Un seul succès est annoncé, et tout échec partiel
-  // précise quelle donnée a été sauvegardée.
+  // Les actualités à la une génèrent leurs slides directement depuis leur fiche.
+  // Les slides manuels restent dans le gestionnaire du carrousel, sans copie liée.
   const handleSaveNews = async (newsData: Partial<NewsItem>): Promise<boolean> => {
-    const isNew = newsData.id === undefined || newsData.id === null;
-    const savedId = newsData.id ?? Date.now();
-    const dataToSave: Partial<NewsItem> = { ...newsData, id: savedId };
-    const saved = await saveNewsBase(dataToSave, 'id', { notify: false });
-
-    if (!saved) {
-      addNotification('Échec de la sauvegarde : l’actualité n’a pas été enregistrée. Vos changements sont toujours dans le formulaire ; libérez de l’espace dans le navigateur puis réessayez.', 'error');
+    const validationError = validateNewsDraft(newsData);
+    if (validationError) {
+      addNotification(validationError, 'error');
       return false;
     }
 
-    let slidesSaved = true;
-    if (dataToSave.featured === false || dataToSave.featured === true) {
-      slidesSaved = setSlides((currentSlides) => {
-        if (dataToSave.featured === false) {
-          return currentSlides.filter((slide) => slide.newsId !== savedId);
-        }
+    const normalized = normalizeNewsDraft(newsData);
+    const isNew = newsData.id === undefined || newsData.id === null;
+    const savedId = newsData.id ?? Date.now();
+    const dataToSave: Partial<NewsItem> = { ...normalized, id: savedId };
+    const saved = await saveNewsBase(dataToSave, 'id', { notify: false });
 
-        const existingIndex = currentSlides.findIndex((slide) => slide.newsId === savedId);
-        const slideData: Slide = {
-          id: existingIndex !== -1 ? currentSlides[existingIndex].id : Date.now() + 10,
-          image: dataToSave.image || '',
-          title: dataToSave.title || '',
-          subtitle: (dataToSave.description && dataToSave.description.length > 150)
-            ? `${dataToSave.description.substring(0, 147)}...`
-            : dataToSave.description || '',
-          ctaText: 'Lire l’actualité',
-          ctaLink: '/news',
-          newsId: savedId,
-        };
-
-        if (existingIndex !== -1) {
-          const updatedSlides = [...currentSlides];
-          updatedSlides[existingIndex] = slideData;
-          return updatedSlides;
-        }
-        return [...currentSlides, slideData];
-      });
+    if (!saved) {
+      addNotification('Échec de la sauvegarde : l’actualité n’a pas été enregistrée. Vos changements restent dans le formulaire ; libérez de l’espace dans le navigateur puis réessayez.', 'error');
+      return false;
     }
 
-    const action = isNew ? 'created' : 'updated';
-    const description = describeCrudAction('omapi_news', action, dataToSave);
-    if (slidesSaved) {
-      addNotification(description.message, 'success');
-    } else {
-      addNotification(`${description.message} Toutefois, la mise à jour du carrousel n’a pas pu être enregistrée. Vérifiez « Carrousel Accueil » puis réessayez.`, 'error');
-    }
+    const description = describeCrudAction('omapi_news', isNew ? 'created' : 'updated', dataToSave);
+    addNotification(description.message, 'success');
     return true;
   };
 
   const handleDeleteNews = (id: number) => {
     return deleteNews(id, (deletedId) => (
-      setSlides((previousSlides) => previousSlides.filter((slide) => slide.newsId !== deletedId))
+      setSlides((previousSlides) => previousSlides.filter((slide) => String(slide.newsId) !== String(deletedId)))
     ));
   };
 
@@ -490,7 +569,6 @@ export const useAdminData = () => {
     eventRegistrations, saveEventRegistration, deleteEventRegistration,
     legislationItems, saveLegislation, deleteLegislation,
     siteConfig, saveSiteConfig,
-    homeScamConfig, saveHomeScamConfig,
     homeResourcesConfig, saveHomeResourcesConfig,
     
     // Notifications System (Toasts)

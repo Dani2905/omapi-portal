@@ -31,6 +31,8 @@ import RessourcesAccueil from './pages/RessourcesAccueil';
 import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
 import SearchResults from './pages/SearchResults';
+import IdentifyIndustrialProperty from './pages/IdentifyIndustrialProperty';
+import IPStrategy from './pages/IPStrategy';
 
 // Helper component to render layout with Header/Footer for public pages
 const PublicLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -60,6 +62,8 @@ const App: React.FC = () => {
         <Route path="/organisation" element={<PublicLayout><Organisation /></PublicLayout>} />
 
         {/* Routes spécifiques Procédures */}
+        <Route path="/identifier-pi" element={<PublicLayout><IdentifyIndustrialProperty /></PublicLayout>} />
+        <Route path="/strategie-pi" element={<PublicLayout><IPStrategy /></PublicLayout>} />
         <Route path="/service/marque" element={<PublicLayout><Marques /></PublicLayout>} />
         <Route path="/service/brevet" element={<PublicLayout><Brevets /></PublicLayout>} />
         <Route path="/service/dessin" element={<PublicLayout><Dessins /></PublicLayout>} />
