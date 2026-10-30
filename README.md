@@ -1,20 +1,32 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Portail OMAPI
 
-# Run and deploy your AI Studio app
+Application web de l’Office Malgache de la Propriété Industrielle. Le site est construit avec React, TypeScript et Vite.
 
-This contains everything you need to run your app locally.
+## Développement local
 
-View your app in AI Studio: https://ai.studio/apps/167bcbd0-fae9-49a9-a26a-1f7ff7d87c38
+Prérequis : Node.js et npm.
 
-## Run Locally
+```bash
+npm install
+npm run dev
+```
 
-**Prerequisites:**  Node.js
+Vérifications disponibles :
 
+```bash
+npm run lint
+npm run build
+npm run test:resources
+```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Déploiement Netlify
+
+Le fichier `netlify.toml` configure automatiquement le site : commande de build `npm run build`, dossier publié `dist`, et redirection SPA vers `index.html` pour permettre le rechargement direct des routes React.
+
+Dans Netlify, importer le dépôt GitHub du portail et lancer le déploiement. Aucun secret d’API n’est requis pour le front-end actuel.
+
+## Données et base de données
+
+À ce stade, plusieurs réglages et données de l’administration sont conservés dans le stockage local du navigateur (`localStorage`). Ils ne sont donc pas partagés entre visiteurs et navigateurs et ne constituent pas une base centrale.
+
+La connexion PostgreSQL devra passer par un backend/API sécurisé. Ne jamais placer des identifiants PostgreSQL ou d’autres secrets dans le code front-end ou dans les variables exposées au navigateur.
