@@ -22,6 +22,7 @@ interface ProfileFormModalProps {
   onSave: (data: ProfileSaveData) => Promise<string | void> | string | void;
   currentUser: Partial<User>;
   existingUsers?: User[];
+  requiresCurrentPassword?: boolean;
 }
 
 const ProfileFormModal: React.FC<ProfileFormModalProps> = ({
@@ -30,6 +31,7 @@ const ProfileFormModal: React.FC<ProfileFormModalProps> = ({
   onSave,
   currentUser,
   existingUsers = [],
+  requiresCurrentPassword = false,
 }) => {
   const [formData, setFormData] = useState<Partial<User>>({});
   const [passwords, setPasswords] = useState({ current: '', new: '', confirm: '' });
@@ -39,7 +41,7 @@ const ProfileFormModal: React.FC<ProfileFormModalProps> = ({
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const accountHasPassword = hasPasswordCredential(currentUser);
+  const accountHasPassword = requiresCurrentPassword || hasPasswordCredential(currentUser);
 
   // N'initialise le formulaire qu'à l'ouverture de la fenêtre.
   // (Ne pas dépendre de l'objet currentUser recréé à chaque rendu du parent :

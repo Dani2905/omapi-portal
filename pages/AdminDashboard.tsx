@@ -8,15 +8,13 @@ import DashboardModals from '../components/admin/DashboardModals';
 import ToastNotifications from '../components/admin/ToastNotifications';
 import ProfileFormModal from '../components/admin/ProfileFormModal';
 import { useAdminData } from '../hooks/useAdminData';
+import { apiRequest, clearApiSession, getApiToken, saveApiSession, type ApiAuthUser } from '../utils/apiAuth';
 import { describeCrudAction } from '../utils/notificationMessages';
 import {
-  createPasswordCredential,
-  hasPasswordCredential,
   normalizeEmail,
   normalizeName,
   validateUserDraft,
   validateAccountDeletion,
-  verifyPasswordCredential,
 } from '../utils/userAccounts';
 
 const AdminDashboard: React.FC = () => {
@@ -25,33 +23,59 @@ const AdminDashboard: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   // User Session
-  const [userRole, setUserRole] = useState<string>('Admin');
-  const [userName, setUserName] = useState<string>('Daniel Razanajaona');
+  const [userRole, setUserRole] = useState<string>('Éditeur');
+  const [userName, setUserName] = useState<string>('');
+  const [authenticatedUser, setAuthenticatedUser] = useState<ApiAuthUser | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [authError, setAuthError] = useState('');
   
   // Logic Hook
   const adminData = useAdminData();
+  const [currentUserId, setCurrentUserId] = useState<string | null>(() => localStorage.getItem('omapi_user_id'));
 
   useEffect(() => {
-    const localRole = localStorage.getItem('omapi_user_role');
-    const localEmail = localStorage.getItem('omapi_user_email');
-    const localName = localStorage.getItem('omapi_user_name');
-
-    if (localEmail && (localRole === 'Admin' || localRole === 'Éditeur')) {
-      setUserRole(localRole);
-      setUserName(localName || 'Daniel Razanajaona');
-      setIsAuthReady(true);
-    } else {
-      navigate('/login');
+    const token = getApiToken();
+    if (!token) {
+      clearApiSession();
+      navigate('/login', { replace: true });
+      return;
     }
+
+    let active = true;
+    apiRequest('/api/auth/me', {}, token)
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}));
+        if (!active) return;
+        if (!response.ok || !payload.user || !['Admin', 'Éditeur'].includes(payload.user.role)) {
+          clearApiSession();
+          navigate('/login', { replace: true });
+          return;
+        }
+        const user = payload.user as ApiAuthUser;
+        saveApiSession(token, user);
+        setAuthenticatedUser(user);
+        setCurrentUserId(String(user.id));
+        setUserRole(user.role);
+        setUserName(user.name);
+        setIsAuthReady(true);
+      })
+      .catch(() => {
+        if (active) setAuthError('Impossible de vérifier la session auprès de l’API. Vérifiez la connexion puis réessayez.');
+      });
+
+    return () => { active = false; };
   }, [navigate]);
 
   const handleLogout = async () => {
-    localStorage.removeItem('omapi_user_role');
-    localStorage.removeItem('omapi_user_name');
-    localStorage.removeItem('omapi_user_id');
-    localStorage.removeItem('omapi_user_email');
-    navigate('/');
+    const token = getApiToken();
+    try {
+      if (token) await apiRequest('/api/auth/logout', { method: 'POST' }, token);
+    } catch {
+      // Le jeton local est supprimé même si l'API est momentanément indisponible.
+    } finally {
+      clearApiSession();
+      navigate('/', { replace: true });
+    }
   };
 
   // Modals State
@@ -67,45 +91,21 @@ const AdminDashboard: React.FC = () => {
   const openModal = (type: typeof modalState.type, data: any = {}) => setModalState({ type, data });
 
   // --- Profile Management Logic ---
-  const [currentUserId, setCurrentUserId] = useState<string | null>(() => localStorage.getItem('omapi_user_id') || '1');
-  
-  useEffect(() => {
-    setCurrentUserId(localStorage.getItem('omapi_user_id') || '1');
-  }, []);
-
-  const currentUser = adminData.users.find(u => String(u.id) === String(currentUserId)) || {
+  const localCurrentUser = adminData.users.find(u => String(u.id) === String(currentUserId));
+  const currentUser = authenticatedUser ? {
+      ...localCurrentUser,
+      id: authenticatedUser.id,
+      name: authenticatedUser.name,
+      email: authenticatedUser.email,
+      role: authenticatedUser.role as any,
+      status: authenticatedUser.status || 'Actif',
+  } : localCurrentUser || {
       id: currentUserId || 1,
       name: userName,
-      email: localStorage.getItem('omapi_user_email') || 'daniel.razanajaona@gmail.com',
+      email: localStorage.getItem('omapi_user_email') || '',
       role: userRole as any,
-      status: 'Actif' as any
+      status: 'Actif' as any,
   };
-
-  // Une suppression ou désactivation faite dans un autre onglet doit
-  // invalider cette session, et les changements de nom/e-mail doivent
-  // aussi actualiser immédiatement les valeurs de session.
-  useEffect(() => {
-    if (!isAuthReady) return;
-
-    const storedUser = adminData.users.find(
-      (user) => String(user.id) === String(currentUserId),
-    );
-
-    if (!storedUser || storedUser.status !== 'Actif') {
-      localStorage.removeItem('omapi_user_role');
-      localStorage.removeItem('omapi_user_name');
-      localStorage.removeItem('omapi_user_id');
-      localStorage.removeItem('omapi_user_email');
-      navigate('/login', { replace: true });
-      return;
-    }
-
-    setUserRole(storedUser.role);
-    setUserName(storedUser.name);
-    localStorage.setItem('omapi_user_role', storedUser.role);
-    localStorage.setItem('omapi_user_name', storedUser.name);
-    localStorage.setItem('omapi_user_email', storedUser.email);
-  }, [adminData.users, currentUserId, isAuthReady, navigate]);
 
   const handleDeleteUser = async (userId: number | string): Promise<boolean> => {
     let latestUsers = adminData.users;
@@ -144,78 +144,79 @@ const AdminDashboard: React.FC = () => {
   };
 
   const handleSaveProfile = async (updatedData: any): Promise<string | void> => {
-      // 1. Préparer les données en préservant l'identité du compte.
-      // L'ID, le rôle et le statut ne peuvent pas être modifiés depuis
-      // le profil, même si le payload contenait d'autres valeurs.
-      const { password, currentPassword, ...dataToSave } = updatedData;
-      const newUserData: any = {
-        ...currentUser,
-        ...dataToSave,
-        id: currentUser.id,
-        name: normalizeName(dataToSave.name ?? currentUser.name),
-        email: normalizeEmail(dataToSave.email ?? currentUser.email),
-        role: currentUser.role,
-        status: currentUser.status,
-      };
+    const { password, currentPassword, ...dataToSave } = updatedData;
+    const newUserData: any = {
+      ...currentUser,
+      ...dataToSave,
+      id: currentUser.id,
+      name: normalizeName(dataToSave.name ?? currentUser.name),
+      email: normalizeEmail(dataToSave.email ?? currentUser.email),
+      role: currentUser.role,
+      status: currentUser.status,
+    };
 
-      const profileErrors = validateUserDraft(
-        newUserData,
-        adminData.users,
-        currentUser.id,
-      );
-      const firstProfileError = profileErrors.name || profileErrors.email;
-      if (firstProfileError) return firstProfileError;
+    const profileErrors = validateUserDraft(newUserData, adminData.users, currentUser.id);
+    const firstProfileError = profileErrors.name || profileErrors.email;
+    if (firstProfileError) return firstProfileError;
+    if (password && password.length < 12) return 'Le nouveau mot de passe doit contenir au moins 12 caractères.';
+    if (password && currentPassword === password) return "Le nouveau mot de passe doit être différent de l'actuel.";
 
-      // 2. Changement de mot de passe : vérifier l'actuel avant tout.
-      // Le mot de passe n'est jamais enregistré en clair ; seule son
-      // empreinte salée est persistée.
-      if (password) {
-        if (hasPasswordCredential(currentUser)) {
-          if (!currentPassword) {
-            return 'Saisissez votre mot de passe actuel pour le modifier.';
-          }
+    const token = getApiToken();
+    if (!token) return 'Votre session a expiré. Reconnectez-vous puis réessayez.';
 
-          if (currentPassword === password) {
-            return "Le nouveau mot de passe doit être différent de l'actuel.";
-          }
-
-          try {
-            const currentIsValid = await verifyPasswordCredential(
-              currentPassword,
-              currentUser,
-            );
-
-            if (!currentIsValid) {
-              return 'Le mot de passe actuel est incorrect.';
-            }
-          } catch {
-            return 'La vérification du mot de passe actuel est impossible dans ce navigateur.';
-          }
-        }
-
-        try {
-          Object.assign(newUserData, await createPasswordCredential(password));
-        } catch {
-          return 'Impossible de sécuriser le nouveau mot de passe dans ce navigateur.';
-        }
+    try {
+      const response = await apiRequest('/api/auth/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newUserData.name,
+          email: newUserData.email,
+          ...(password ? { currentPassword, password } : {}),
+        }),
+      }, token);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (response.status === 401) return 'Votre session a expiré. Reconnectez-vous puis réessayez.';
+        if (response.status === 409) return 'Cette adresse e-mail est déjà utilisée par un autre compte.';
+        if (response.status === 400 && /current password/i.test(payload.error || '')) return 'Le mot de passe actuel est incorrect.';
+        if (response.status === 400 && /12 characters/i.test(payload.error || '')) return 'Le nouveau mot de passe doit contenir au moins 12 caractères.';
+        return payload.error || "La mise à jour du profil via l'API a échoué.";
       }
+      if (!payload.user) return "Réponse invalide de l'API lors de la mise à jour du profil.";
 
-      const profileSaved = await adminData.saveUser(newUserData, 'id', { notify: false });
-      if (!profileSaved) {
-        return "Le profil n'a pas été enregistré. Vos changements sont conservés dans cette fenêtre ; vérifiez l'espace disponible dans le navigateur puis réessayez.";
-      }
+      const updatedUser = payload.user as ApiAuthUser;
+      setAuthenticatedUser(updatedUser);
+      setUserName(updatedUser.name);
+      setUserRole(updatedUser.role);
+      setCurrentUserId(String(updatedUser.id));
+      saveApiSession(token, updatedUser);
 
-      // 3. Mettre à jour la session locale (affichage immédiat)
-      setUserName(newUserData.name);
-      localStorage.setItem('omapi_user_name', newUserData.name);
-      localStorage.setItem('omapi_user_email', newUserData.email);
+      // Keep the local dashboard's user list aligned for display only; the API remains authoritative.
+      await adminData.saveUser({
+        ...(localCurrentUser || {}),
+        id: updatedUser.id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        status: updatedUser.status,
+      } as any, 'id', { notify: false });
 
       setIsProfileModalOpen(false);
-      adminData.addNotification(`Votre profil (« ${newUserData.name} ») a été mis à jour. Le nouveau nom et la nouvelle adresse e-mail sont actifs immédiatement.`, 'success');
+      adminData.addNotification(`Votre profil (« ${updatedUser.name} ») a été mis à jour dans l'API.`, 'success');
+    } catch {
+      return "Impossible de joindre l'API OMAPI. Vérifiez la connexion puis réessayez.";
+    }
   };
 
   if (!isAuthReady) {
-    return <div className="h-screen flex items-center justify-center bg-gray-100">Chargement...</div>;
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-100 p-6">
+        <div className="max-w-md rounded-xl bg-white p-6 text-center shadow">
+          <p className="text-gray-700">{authError || 'Vérification de la session…'}</p>
+          {authError && <button className="mt-4 rounded bg-blue-700 px-4 py-2 text-white" onClick={() => navigate('/login', { replace: true })}>Retour à la connexion</button>}
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -264,6 +265,7 @@ const AdminDashboard: React.FC = () => {
             onClose={() => setIsProfileModalOpen(false)}
             currentUser={currentUser}
             existingUsers={adminData.users}
+            requiresCurrentPassword={true}
             onSave={handleSaveProfile}
         />
       </main>

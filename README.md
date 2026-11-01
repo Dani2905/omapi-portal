@@ -17,16 +17,17 @@ Vérifications disponibles :
 npm run lint
 npm run build
 npm run test:resources
+npm run test:users
 ```
 
 ## Déploiement Netlify
 
-Le fichier `netlify.toml` configure automatiquement le site : commande de build `npm run build`, dossier publié `dist`, et redirection SPA vers `index.html` pour permettre le rechargement direct des routes React.
+Le fichier `netlify.toml` configure la commande de build `npm run build`, le dossier publié `dist`, et la redirection SPA vers `index.html` pour permettre le rechargement direct des routes React.
 
-Dans Netlify, importer le dépôt GitHub du portail et lancer le déploiement. Aucun secret d’API n’est requis pour le front-end actuel.
+Importer le dépôt GitHub du portail dans Netlify puis déployer. Le front-end appelle l’API OMAPI à `https://www.omapi.ciprabemananjara.mg`; aucun mot de passe ni secret d’API n’est requis dans Netlify.
 
-## Données et base de données
+## Authentification et données
 
-À ce stade, plusieurs réglages et données de l’administration sont conservés dans le stockage local du navigateur (`localStorage`). Ils ne sont donc pas partagés entre visiteurs et navigateurs et ne constituent pas une base centrale.
+La connexion Admin, la vérification de session, la déconnexion et la mise à jour du profil passent par l’API OMAPI. Le jeton Bearer est conservé dans `sessionStorage` et expire côté serveur après 12 heures. Le backend et ses consignes cPanel sont dans `backend/README.md`.
 
-La connexion PostgreSQL devra passer par un backend/API sécurisé. Ne jamais placer des identifiants PostgreSQL ou d’autres secrets dans le code front-end ou dans les variables exposées au navigateur.
+Les autres données de l’administration restent actuellement dans le stockage local du navigateur et ne sont pas centralisées. Les candidatures web restent en mode local, conformément au périmètre convenu. Toute connexion PostgreSQL doit passer par le backend; ne jamais intégrer d’identifiants ou de secrets dans le front-end, GitHub ou Netlify.

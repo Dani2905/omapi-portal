@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { NAV_ITEMS } from '../constants';
 import { MagnifyingGlassIcon } from './admin/AdminIcons';
 import { Menu, X, ChevronDown } from 'lucide-react';
+import { getApiToken } from '../utils/apiAuth';
 
 const Header: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -17,7 +18,7 @@ const Header: React.FC = () => {
 
   useEffect(() => {
     const checkAuth = () => {
-      const hasSession = !!localStorage.getItem('omapi_user_email') && !!localStorage.getItem('omapi_user_role');
+      const hasSession = Boolean(getApiToken());
       setIsLoggedIn(hasSession);
     };
     checkAuth();
