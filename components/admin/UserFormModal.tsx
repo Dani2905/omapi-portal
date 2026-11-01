@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { User } from '../../types';
 import { XMarkIcon, UsersIcon, EnvelopeIcon, KeyIcon, CheckIcon, EyeIcon, EyeSlashIcon } from './AdminIcons';
 import {
-  createPasswordCredential,
   generateTemporaryPassword,
   isPrincipalAdminAccount,
   normalizeEmail,
@@ -17,7 +16,7 @@ import {
 interface UserFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (user: Partial<User>) => void | boolean | Promise<void | boolean>;
+  onSave: (user: Partial<User> & { password?: string }) => void | boolean | Promise<void | boolean>;
   initialData: Partial<User>;
   existingUsers?: User[];
   currentUserId?: User['id'];
@@ -125,15 +124,20 @@ const UserFormModal: React.FC<UserFormModalProps> = ({
     setIsSubmitting(true);
 
     try {
-      let payload: Partial<User> = normalizedDraft;
+      let payload: Partial<User> & { password?: string } = normalizedDraft;
 
       if (passwordMode !== 'none') {
-        const passwordToSet = passwordMode === 'manual' ? manualPassword : autoPassword;
-        const credential = await createPasswordCredential(passwordToSet);
-        payload = { ...payload, ...credential };
+        payload = {
+          ...payload,
+          password: passwordMode === 'manual' ? manualPassword : autoPassword,
+        };
       }
 
-      await onSave(payload);
+      const saved = await onSave(payload);
+      if (saved !== false) {
+        setManualPassword('');
+        setAutoPassword('');
+      }
     } catch (error) {
       setFormErrors({
         form: error instanceof Error
@@ -284,6 +288,11 @@ const UserFormModal: React.FC<UserFormModalProps> = ({
                         <KeyIcon className="w-3 h-3 mr-2" /> {isEditMode ? 'Modifier le mot de passe (optionnel)' : 'Initialisation du mot de passe'}
                     </h4>
 
+                    {isSelfAccount && (
+                      <div className="bg-blue-50 border border-blue-200 px-3 py-2 text-[11px] font-medium text-blue-800">
+                        Pour modifier votre propre mot de passe, utilisez la fenêtre « Mon profil » afin de confirmer votre mot de passe actuel.
+                      </div>
+                    )}
                     <div className="flex items-center space-x-6 mb-2">
                         {isEditMode && (
                             <label className="flex items-center cursor-pointer">
@@ -301,7 +310,8 @@ const UserFormModal: React.FC<UserFormModalProps> = ({
                             <input
                                 type="radio"
                                 name="pwdMode"
-                                className="w-3 h-3 text-slate-900 focus:ring-slate-900"
+                                disabled={isSelfAccount}
+                                className="w-3 h-3 text-slate-900 focus:ring-slate-900 disabled:opacity-40"
                                 checked={passwordMode === 'auto'}
                                 onChange={() => handlePasswordModeChange('auto')}
                             />
@@ -311,7 +321,8 @@ const UserFormModal: React.FC<UserFormModalProps> = ({
                             <input
                                 type="radio"
                                 name="pwdMode"
-                                className="w-3 h-3 text-slate-900 focus:ring-slate-900"
+                                disabled={isSelfAccount}
+                                className="w-3 h-3 text-slate-900 focus:ring-slate-900 disabled:opacity-40"
                                 checked={passwordMode === 'manual'}
                                 onChange={() => handlePasswordModeChange('manual')}
                             />
@@ -326,8 +337,8 @@ const UserFormModal: React.FC<UserFormModalProps> = ({
                               <div className="flex-1">
                                   <p className="font-bold uppercase tracking-tight">Mot de passe temporaire unique</p>
                                   <p className="mt-1 text-slate-500">
-                                    Aucun e-mail automatique n'existe encore dans ce prototype : copiez ce mot de passe
-                                    et transmettez-le à l'utilisateur par un canal sûr. Seule son empreinte sera enregistrée.
+                                    Aucun e-mail automatique n'est configuré : copiez ce mot de passe
+                                    et transmettez-le à l'utilisateur par un canal sûr. L'API enregistre uniquement son hash sécurisé.
                                   </p>
                                   <div className="mt-3 flex gap-2">
                                     <input
@@ -374,7 +385,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({
                                     id="user-password"
                                     type={showPassword ? "text" : "password"}
                                     required={passwordMode === 'manual'}
-                                    minLength={8}
+                                    minLength={12}
                                     autoComplete="new-password"
                                     className="w-full px-3 py-2 border border-slate-300 focus:border-slate-900 outline-none text-xs text-slate-600 bg-white"
                                     placeholder={isEditMode ? "Saisir le nouveau mot de passe..." : "Saisir le mot de passe..."}
@@ -398,7 +409,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({
                             ) : (
                               <p className="text-[10px] text-slate-500 mt-2 flex items-center uppercase tracking-tight">
                                   <CheckIcon className="w-3 h-3 mr-1 text-slate-400" />
-                                  8 caractères minimum requis
+                                  12 caractères minimum requis
                               </p>
                             )}
                         </div>

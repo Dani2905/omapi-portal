@@ -162,11 +162,7 @@ export interface User {
   email: string;
   role: 'Admin' | 'Éditeur';
   status: 'Actif' | 'Inactif';
-  /**
-   * Empreinte du mot de passe du prototype (SHA-256 salé, calculée
-   * dans le navigateur). Ne jamais stocker le mot de passe en clair.
-   * En production, cette vérification devra être faite côté serveur.
-   */
+  /** Champs hérités d’anciens comptes de démonstration; ne sont pas renvoyés par l’API. */
   passwordSalt?: string;
   passwordHash?: string;
   passwordUpdatedAt?: string;

@@ -45,7 +45,6 @@ const DashboardModals: React.FC<DashboardModalsProps> = ({ modalState, closeModa
     if (isExistingAccount) {
       const stillExists = Array.isArray(data.users)
         && data.users.some((user: any) => String(user.id) === String(modalState.data.id));
-
       if (!stillExists) {
         throw new Error("Ce compte n'existe plus. Il a peut-être été supprimé dans une autre fenêtre.");
       }
@@ -54,43 +53,25 @@ const DashboardModals: React.FC<DashboardModalsProps> = ({ modalState, closeModa
     const originalUser = isExistingAccount
       ? data.users.find((user: any) => String(user.id) === String(modalState.data.id))
       : undefined;
-
     if (isExistingAccount) {
-      const error = validateAccountModification(
-        data.users,
-        originalUser,
-        userData,
-        currentUserId,
-      );
+      const error = validateAccountModification(data.users, originalUser, userData, currentUserId);
       if (error) throw new Error(error);
     }
 
-    const dbData: any = {
-      id: originalUser?.id ?? Date.now(),
+    const apiDraft: any = {
+      ...(isExistingAccount ? { id: originalUser.id } : {}),
       name: userData.name,
       email: userData.email,
       role: userData.role ?? originalUser?.role ?? 'Éditeur',
-      status: userData.status ?? originalUser?.status ?? 'Actif'
+      status: userData.status ?? originalUser?.status ?? 'Actif',
+      ...(typeof userData.password === 'string' && userData.password ? { password: userData.password } : {}),
     };
 
-    // Le formulaire ne transmet jamais de mot de passe en clair :
-    // uniquement son empreinte salée, lorsqu'un nouveau mot de passe
-    // a été défini. En édition sans changement, les champs absents
-    // laissent l'empreinte existante intacte (fusion dans useCrud).
-    if (userData.passwordSalt && userData.passwordHash) {
-      dbData.passwordSalt = userData.passwordSalt;
-      dbData.passwordHash = userData.passwordHash;
-      dbData.passwordUpdatedAt = userData.passwordUpdatedAt;
-    }
-
-    const saved = await data.saveUser(dbData, 'id', { notify: false });
-    if (saved === false) {
-      throw new Error("Le compte n'a pas été enregistré. Vérifiez l'espace disponible dans le navigateur puis réessayez.");
-    }
+    await data.saveUser(apiDraft, 'id', { notify: false });
     const userDescription = describeCrudAction(
       'omapi_users',
       isExistingAccount ? 'updated' : 'created',
-      dbData,
+      apiDraft,
     );
     data.addNotification(userDescription.message, 'success');
     closeModal();

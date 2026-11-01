@@ -298,6 +298,196 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_request, response
   }
 });
 
+app.post('/api/admin/users', requireAuth, requireAdmin, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const name = typeof request.body?.name === 'string' ? request.body.name.trim().replace(/\s+/g, ' ') : '';
+  const email = normalizeEmail(request.body?.email);
+  const role = request.body?.role;
+  const status = request.body?.status;
+  const password = request.body?.password;
+
+  if (name.length < 2 || name.length > 200 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 320) {
+    return response.status(400).json({ error: 'Name or email is invalid' });
+  }
+  if (!['Admin', 'Éditeur'].includes(role) || !['Actif', 'Inactif'].includes(status)) {
+    return response.status(400).json({ error: 'Role or status is invalid' });
+  }
+  if (typeof password !== 'string' || password.trim() !== password || password.length < 12 || password.length > 1024) {
+    return response.status(400).json({ error: 'Password must contain at least 12 characters' });
+  }
+
+  try {
+    const passwordHash = await hashPassword(password);
+    const { rows } = await pool.query(
+      `INSERT INTO app_users (name, email, role, status, password_hash, password_changed_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       RETURNING id, name, email, role, status, created_at, updated_at`,
+      [name, email, role, status, passwordHash],
+    );
+    return response.status(201).json({ user: rows[0] });
+  } catch (error) {
+    if (error?.code === '23505') {
+      return response.status(409).json({ error: 'That email is already assigned to another account' });
+    }
+    console.error('OMAPI admin user create failed');
+    return response.status(503).json({ error: 'User service unavailable' });
+  }
+});
+
+app.patch('/api/admin/users/:id', requireAuth, requireAdmin, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const userId = request.params.id;
+  if (!/^\d+$/.test(userId)) return response.status(400).json({ error: 'User id is invalid' });
+
+  const name = typeof request.body?.name === 'string' ? request.body.name.trim().replace(/\s+/g, ' ') : '';
+  const email = normalizeEmail(request.body?.email);
+  const role = request.body?.role;
+  const status = request.body?.status;
+  const password = request.body?.password;
+  const changingPassword = typeof password === 'string' && password.length > 0;
+
+  if (name.length < 2 || name.length > 200 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 320) {
+    return response.status(400).json({ error: 'Name or email is invalid' });
+  }
+  if (!['Admin', 'Éditeur'].includes(role) || !['Actif', 'Inactif'].includes(status)) {
+    return response.status(400).json({ error: 'Role or status is invalid' });
+  }
+  if (changingPassword && (password.trim() !== password || password.length < 12 || password.length > 1024)) {
+    return response.status(400).json({ error: 'Password must contain at least 12 characters' });
+  }
+  if (password !== undefined && password !== '' && typeof password !== 'string') {
+    return response.status(400).json({ error: 'Password is invalid' });
+  }
+
+  let passwordHash;
+  try {
+    if (changingPassword) passwordHash = await hashPassword(password);
+  } catch {
+    return response.status(400).json({ error: 'Password could not be processed' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('LOCK TABLE app_users IN SHARE ROW EXCLUSIVE MODE');
+    const { rows: currentRows } = await client.query(
+      `SELECT id, name, email, role, status FROM app_users WHERE id = $1 FOR UPDATE`,
+      [userId],
+    );
+    if (!currentRows.length) {
+      await client.query('ROLLBACK');
+      return response.status(404).json({ error: 'User not found' });
+    }
+    const current = currentRows[0];
+    const isPrimary = String(current.id) === '1';
+    const isSelf = String(current.id) === String(request.auth.user.id);
+
+    if (isPrimary && (email !== normalizeEmail(current.email) || role !== 'Admin' || status !== 'Actif')) {
+      await client.query('ROLLBACK');
+      return response.status(400).json({ error: 'The primary administrator email, role, and active status are protected' });
+    }
+    if (isSelf && (role !== current.role || status !== current.status)) {
+      await client.query('ROLLBACK');
+      return response.status(400).json({ error: 'You cannot change your own role or status' });
+    }
+    if (isSelf && changingPassword) {
+      await client.query('ROLLBACK');
+      return response.status(400).json({ error: 'Use the profile page to change your own password' });
+    }
+
+    const { rows: remainingAdminRows } = await client.query(
+      `SELECT COUNT(*)::int AS count
+         FROM app_users
+        WHERE id <> $1 AND role = 'Admin' AND status = 'Actif'`,
+      [userId],
+    );
+    const targetRemainsAdmin = role === 'Admin' && status === 'Actif';
+    if (!targetRemainsAdmin && remainingAdminRows[0].count === 0) {
+      await client.query('ROLLBACK');
+      return response.status(409).json({ error: 'At least one active administrator must remain' });
+    }
+
+    const { rows: updatedRows } = await client.query(
+      `UPDATE app_users
+          SET name = $1,
+              email = $2,
+              role = $3,
+              status = $4,
+              password_hash = COALESCE($5, password_hash),
+              password_changed_at = CASE WHEN $5::text IS NULL THEN password_changed_at ELSE NOW() END,
+              updated_at = NOW()
+        WHERE id = $6
+        RETURNING id, name, email, role, status, created_at, updated_at`,
+      [name, email, role, status, passwordHash || null, userId],
+    );
+    if (status === 'Inactif' || changingPassword || role !== current.role) {
+      await client.query(
+        `UPDATE admin_sessions SET revoked_at = NOW()
+          WHERE user_id = $1 AND revoked_at IS NULL`,
+        [userId],
+      );
+    }
+    await client.query('COMMIT');
+    return response.json({ user: updatedRows[0] });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (error?.code === '23505') {
+      return response.status(409).json({ error: 'That email is already assigned to another account' });
+    }
+    console.error('OMAPI admin user update failed');
+    return response.status(503).json({ error: 'User service unavailable' });
+  } finally {
+    client.release();
+  }
+});
+
+app.delete('/api/admin/users/:id', requireAuth, requireAdmin, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const userId = request.params.id;
+  if (!/^\d+$/.test(userId)) return response.status(400).json({ error: 'User id is invalid' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('LOCK TABLE app_users IN SHARE ROW EXCLUSIVE MODE');
+    const { rows } = await client.query(
+      `SELECT id FROM app_users WHERE id = $1 FOR UPDATE`,
+      [userId],
+    );
+    if (!rows.length) {
+      await client.query('ROLLBACK');
+      return response.status(404).json({ error: 'User not found' });
+    }
+    if (String(rows[0].id) === '1') {
+      await client.query('ROLLBACK');
+      return response.status(403).json({ error: 'The primary administrator cannot be deleted' });
+    }
+    if (String(rows[0].id) === String(request.auth.user.id)) {
+      await client.query('ROLLBACK');
+      return response.status(403).json({ error: 'You cannot delete your own account' });
+    }
+    const { rows: admins } = await client.query(
+      `SELECT COUNT(*)::int AS count
+         FROM app_users
+        WHERE id <> $1 AND role = 'Admin' AND status = 'Actif'`,
+      [userId],
+    );
+    if (admins[0].count === 0) {
+      await client.query('ROLLBACK');
+      return response.status(409).json({ error: 'The last active administrator cannot be deleted' });
+    }
+    await client.query('DELETE FROM app_users WHERE id = $1', [userId]);
+    await client.query('COMMIT');
+    return response.json({ ok: true, id: userId });
+  } catch {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('OMAPI admin user delete failed');
+    return response.status(503).json({ error: 'User service unavailable' });
+  } finally {
+    client.release();
+  }
+});
+
 app.use((error, _request, response, _next) => {
   if (error?.message === 'Origin not allowed') {
     return response.status(403).json({ error: 'Origin not allowed' });

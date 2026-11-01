@@ -14,7 +14,6 @@ import {
   validateProfilePasswordChange,
   validateUserDraft,
   verifyPasswordCredential,
-  SUPER_ADMIN_EMAILS,
 } from '../utils/userAccounts';
 
 async function main() {
@@ -53,12 +52,14 @@ async function main() {
     {},
   );
 
-  console.log('Test 4 — adresse réservée refusée pour un nouveau compte');
-  const reserved = validateUserDraft(
-    { name: 'Faux Admin', email: SUPER_ADMIN_EMAILS[0] },
-    DEFAULT_USERS,
+  console.log('Test 4 — les comptes fictifs locaux ne réservent pas d’adresse dans l’API');
+  assert.deepEqual(
+    validateUserDraft(
+      { name: 'Compte API', email: DEFAULT_USERS[0].email },
+      [],
+    ),
+    {},
   );
-  assert.match(reserved.email ?? '', /réservée/);
 
   console.log('Test 5 — compte administrateur principal modifiable par son titulaire');
   assert.deepEqual(
@@ -82,7 +83,7 @@ async function main() {
 
   console.log('Test 7 — mot de passe manuel : vide/court refusés, valeur sûre acceptée');
   assert.match(validatePasswordSelection('manual', '') ?? '', /Saisissez/);
-  assert.match(validatePasswordSelection('manual', 'court') ?? '', /8 caractères/);
+  assert.match(validatePasswordSelection('manual', 'court') ?? '', /12 caractères/);
   assert.equal(validatePasswordSelection('manual', generateTemporaryPassword()), undefined);
   assert.equal(validatePasswordSelection('none', ''), undefined);
 
@@ -137,7 +138,7 @@ async function main() {
   assert.equal(validateProfilePasswordChange({
     currentPassword: '', newPassword: nextPassword, confirmPassword: nextPassword, hasCurrentCredential: false,
   }), undefined, 'un compte hérité sans mot de passe peut en définir un premier');
-  assert.match(validateNewPassword('court') ?? '', /8 caractères/);
+  assert.match(validateNewPassword('court') ?? '', /12 caractères/);
 
   console.log("Test 11 — changement effectif : l'ancien mot de passe cesse de fonctionner");
   const oldPassword = generateTemporaryPassword();

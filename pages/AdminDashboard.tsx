@@ -8,6 +8,7 @@ import DashboardModals from '../components/admin/DashboardModals';
 import ToastNotifications from '../components/admin/ToastNotifications';
 import ProfileFormModal from '../components/admin/ProfileFormModal';
 import { useAdminData } from '../hooks/useAdminData';
+import { useApiUsers } from '../hooks/useApiUsers';
 import { apiRequest, clearApiSession, getApiToken, saveApiSession, type ApiAuthUser } from '../utils/apiAuth';
 import { describeCrudAction } from '../utils/notificationMessages';
 import {
@@ -31,6 +32,15 @@ const AdminDashboard: React.FC = () => {
   
   // Logic Hook
   const adminData = useAdminData();
+  const apiUsers = useApiUsers(isAuthReady && userRole === 'Admin');
+  const dashboardData = {
+    ...adminData,
+    users: apiUsers.users,
+    usersLoading: apiUsers.loading,
+    usersError: apiUsers.error,
+    refreshUsers: apiUsers.refresh,
+    saveUser: apiUsers.saveUser,
+  };
   const [currentUserId, setCurrentUserId] = useState<string | null>(() => localStorage.getItem('omapi_user_id'));
 
   useEffect(() => {
@@ -91,7 +101,7 @@ const AdminDashboard: React.FC = () => {
   const openModal = (type: typeof modalState.type, data: any = {}) => setModalState({ type, data });
 
   // --- Profile Management Logic ---
-  const localCurrentUser = adminData.users.find(u => String(u.id) === String(currentUserId));
+  const localCurrentUser = apiUsers.users.find(u => String(u.id) === String(currentUserId));
   const currentUser = authenticatedUser ? {
       ...localCurrentUser,
       id: authenticatedUser.id,
@@ -108,39 +118,25 @@ const AdminDashboard: React.FC = () => {
   };
 
   const handleDeleteUser = async (userId: number | string): Promise<boolean> => {
-    let latestUsers = adminData.users;
-    try {
-      const stored = localStorage.getItem('omapi_users');
-      if (stored !== null) {
-        const parsed = JSON.parse(stored);
-        if (!Array.isArray(parsed)) throw new Error('Les données des comptes sont illisibles.');
-        latestUsers = parsed;
-      }
-    } catch {
-      throw new Error('Suppression annulée : impossible de vérifier les comptes enregistrés. Rechargez le tableau de bord puis réessayez.');
-    }
-
-    const targetUser = latestUsers.find(
-      (user: any) => String(user.id) === String(userId),
-    );
+    const targetUser = apiUsers.users.find((user) => String(user.id) === String(userId));
     const validationError = validateAccountDeletion(
-      latestUsers,
+      apiUsers.users,
       targetUser,
       currentUserId ?? undefined,
     );
-
     if (validationError) throw new Error(validationError);
 
-    const deleted = await adminData.deleteUser(userId, { notify: false });
-    if (deleted === false) {
-      throw new Error('La suppression a échoué. Le compte est toujours présent ; actualisez la page puis réessayez.');
+    try {
+      await apiUsers.deleteUser(userId);
+      adminData.addNotification(
+        describeCrudAction('omapi_users', 'deleted', targetUser).message,
+        'success',
+      );
+      return true;
+    } catch (error) {
+      if (error instanceof Error) throw error;
+      throw new Error('La suppression a échoué. Actualisez la liste puis réessayez.');
     }
-
-    adminData.addNotification(
-      describeCrudAction('omapi_users', 'deleted', targetUser).message,
-      'success',
-    );
-    return true;
   };
 
   const handleSaveProfile = async (updatedData: any): Promise<string | void> => {
@@ -155,7 +151,7 @@ const AdminDashboard: React.FC = () => {
       status: currentUser.status,
     };
 
-    const profileErrors = validateUserDraft(newUserData, adminData.users, currentUser.id);
+    const profileErrors = validateUserDraft(newUserData, apiUsers.users, currentUser.id);
     const firstProfileError = profileErrors.name || profileErrors.email;
     if (firstProfileError) return firstProfileError;
     if (password && password.length < 12) return 'Le nouveau mot de passe doit contenir au moins 12 caractères.';
@@ -191,15 +187,7 @@ const AdminDashboard: React.FC = () => {
       setCurrentUserId(String(updatedUser.id));
       saveApiSession(token, updatedUser);
 
-      // Keep the local dashboard's user list aligned for display only; the API remains authoritative.
-      await adminData.saveUser({
-        ...(localCurrentUser || {}),
-        id: updatedUser.id,
-        name: updatedUser.name,
-        email: updatedUser.email,
-        role: updatedUser.role,
-        status: updatedUser.status,
-      } as any, 'id', { notify: false });
+      if (updatedUser.role === 'Admin') await apiUsers.refresh();
 
       setIsProfileModalOpen(false);
       adminData.addNotification(`Votre profil (« ${updatedUser.name} ») a été mis à jour dans l'API.`, 'success');
@@ -246,7 +234,7 @@ const AdminDashboard: React.FC = () => {
             activeTab={activeTab} 
             setActiveTab={setActiveTab}
             userRole={userRole} 
-            data={adminData} 
+            data={dashboardData}
             openModal={openModal}
             currentUserId={currentUserId ?? undefined}
             onDeleteUser={handleDeleteUser}
@@ -256,7 +244,7 @@ const AdminDashboard: React.FC = () => {
         <DashboardModals 
           modalState={modalState} 
           closeModal={closeModal} 
-          data={adminData}
+          data={dashboardData}
           currentUserId={currentUserId ?? undefined}
         />
 
@@ -264,7 +252,7 @@ const AdminDashboard: React.FC = () => {
             isOpen={isProfileModalOpen}
             onClose={() => setIsProfileModalOpen(false)}
             currentUser={currentUser}
-            existingUsers={adminData.users}
+            existingUsers={apiUsers.users}
             requiresCurrentPassword={true}
             onSave={handleSaveProfile}
         />

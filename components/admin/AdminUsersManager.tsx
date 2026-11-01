@@ -10,6 +10,9 @@ import { PencilSquareIcon, TrashIcon, UserPlusIcon, XMarkIcon } from './AdminIco
 interface AdminUsersManagerProps {
   users: User[];
   currentUserId?: User['id'];
+  loading?: boolean;
+  error?: string;
+  onRefresh?: () => void | Promise<boolean>;
   onAdd: () => void;
   onEdit: (user: User) => void;
   onDelete: (id: User['id']) => Promise<boolean | void> | boolean | void;
@@ -18,6 +21,9 @@ interface AdminUsersManagerProps {
 const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
   users,
   currentUserId,
+  loading = false,
+  error,
+  onRefresh,
   onAdd,
   onEdit,
   onDelete,
@@ -88,12 +94,21 @@ const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
         <button
           type="button"
           onClick={onAdd}
-          className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-sm border border-slate-900 flex items-center"
+          disabled={loading || Boolean(error)}
+          className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-sm border border-slate-900 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <UserPlusIcon className="w-4 h-4 mr-2 text-blue-400" />
           <span className="text-[10px] font-bold uppercase tracking-widest">Ajouter un utilisateur</span>
         </button>
       </div>
+
+      <p className="text-[11px] text-slate-500">Liste sécurisée depuis l’API OMAPI. Les mots de passe ne sont ni affichés ni conservés dans le navigateur.</p>
+      {error && (
+        <div role="alert" className="flex items-center justify-between gap-4 bg-red-50 border border-red-200 px-4 py-3 text-xs text-red-800">
+          <span>{error}</span>
+          {onRefresh && <button type="button" onClick={() => void onRefresh()} className="shrink-0 font-bold underline">Réessayer</button>}
+        </div>
+      )}
 
       <div className="bg-white rounded-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
@@ -171,8 +186,11 @@ const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
             </tbody>
           </table>
         </div>
-        {users.length === 0 && (
-          <div className="p-12 text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest italic">Aucun utilisateur</div>
+        {loading && users.length === 0 && (
+          <div className="p-12 text-center text-slate-500 text-[10px] font-bold uppercase tracking-widest">Chargement des comptes depuis l’API…</div>
+        )}
+        {!loading && !error && users.length === 0 && (
+          <div className="p-12 text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest italic">Aucun compte dans la base OMAPI</div>
         )}
       </div>
 
@@ -190,7 +208,7 @@ const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
             <div className="flex items-start justify-between px-5 py-4 bg-slate-50 border-b border-slate-200">
               <div>
                 <h3 id="delete-account-title" className="text-xs font-bold text-slate-900 uppercase tracking-widest">Confirmer la suppression</h3>
-                <p className="mt-1 text-[11px] text-slate-500">Cette action est définitive dans cette démo.</p>
+                <p className="mt-1 text-[11px] text-slate-500">Cette action est définitive dans la base de comptes OMAPI.</p>
               </div>
               <button type="button" aria-label="Fermer" disabled={isDeleting} onClick={closeConfirmation} className="text-slate-400 hover:text-red-600 disabled:opacity-50">
                 <XMarkIcon className="w-4 h-4" />

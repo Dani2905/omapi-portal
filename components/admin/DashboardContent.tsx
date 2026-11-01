@@ -158,6 +158,9 @@ const DashboardContent: React.FC<DashboardContentProps> = ({ activeTab, setActiv
         <AdminUsersManager
           users={data.users}
           currentUserId={currentUserId}
+          loading={data.usersLoading}
+          error={data.usersError}
+          onRefresh={data.refreshUsers}
           onAdd={() => openModal('user', { name: '', email: '', role: 'Éditeur', status: 'Actif' })}
           onEdit={(item) => openModal('user', item)}
           onDelete={onDeleteUser}

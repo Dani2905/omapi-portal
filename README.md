@@ -28,6 +28,6 @@ Importer le dépôt GitHub du portail dans Netlify puis déployer. Le front-end 
 
 ## Authentification et données
 
-La connexion Admin, la vérification de session, la déconnexion et la mise à jour du profil passent par l’API OMAPI. Le jeton Bearer est conservé dans `sessionStorage` et expire côté serveur après 12 heures. Le backend et ses consignes cPanel sont dans `backend/README.md`.
+La connexion Admin, la vérification de session, la déconnexion, la mise à jour du profil et la gestion des comptes Admin/Éditeur passent par l’API OMAPI. Le jeton Bearer est conservé dans `sessionStorage` et expire côté serveur après 12 heures. Les comptes de démonstration locaux ne sont pas importés; la liste utilise les seuls comptes PostgreSQL. Le backend et ses consignes cPanel sont dans `backend/README.md`.
 
 Les autres données de l’administration restent actuellement dans le stockage local du navigateur et ne sont pas centralisées. Les candidatures web restent en mode local, conformément au périmètre convenu. Toute connexion PostgreSQL doit passer par le backend; ne jamais intégrer d’identifiants ou de secrets dans le front-end, GitHub ou Netlify.

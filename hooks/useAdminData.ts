@@ -1,7 +1,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCrud, useObjectStorage } from './useCrud';
-import { SLIDES, DEFAULT_ANNOUNCEMENTS, DEFAULT_FORMS, DEFAULT_GUIDES, DEFAULT_FORMATIONS, DEFAULT_FORMATION_REGISTRATIONS, DEFAULT_USERS, DEFAULT_GOPI, DEFAULT_GOPI_ORDERS, DEFAULT_EVENTS, DEFAULT_EVENT_REGISTRATIONS, DEFAULT_LEGISLATION, DEFAULT_JOBS } from '../constants';
+import { SLIDES, DEFAULT_ANNOUNCEMENTS, DEFAULT_FORMS, DEFAULT_GUIDES, DEFAULT_FORMATIONS, DEFAULT_FORMATION_REGISTRATIONS, DEFAULT_GOPI, DEFAULT_GOPI_ORDERS, DEFAULT_EVENTS, DEFAULT_EVENT_REGISTRATIONS, DEFAULT_LEGISLATION, DEFAULT_JOBS } from '../constants';
 import { LATEST_NEWS } from '../data/mocks/news';
 import { describeCrudAction } from '../utils/notificationMessages';
 import { canTransitionGopiOrder, GOPI_PAYMENT_METHODS } from '../utils/gopiLogic';
@@ -10,7 +10,7 @@ import { normalizeNewsDraft, validateNewsDraft } from '../utils/editorialLogic';
 import { JOB_STATUSES, normalizeJobOfferDraft, validateJobOfferDraft } from '../utils/jobLogic';
 import { normalizeEventDraft, normalizeEventRegistrationDraft, validateEventDraft, validateEventRegistrationDraft } from '../utils/eventLogic';
 import { DEFAULT_HOME_RESOURCES_CONFIG } from '../data/homeResources';
-import { Slide, NewsItem, Announcement, Formulaire, Guide, Formation, FormationRegistration, User, JobOffer, JobApplication, GopiItem, GopiOrder, Event, EventRegistration, LegislationItem, Notification, SystemNotification, SiteConfig, HomeResourcesConfig, ActivityLog } from '../types';
+import { Slide, NewsItem, Announcement, Formulaire, Guide, Formation, FormationRegistration, JobOffer, JobApplication, GopiItem, GopiOrder, Event, EventRegistration, LegislationItem, Notification, SystemNotification, SiteConfig, HomeResourcesConfig, ActivityLog } from '../types';
 
 const READ_NOTIFICATIONS_KEY = 'omapi_read_notifications';
 
@@ -224,9 +224,6 @@ export const useAdminData = () => {
     }
     return saveGopiOrder({ ...patch, id: current.id }, 'id');
   };
-
-  // 7. Users
-  const { items: users, saveItem: saveUser, deleteItem: deleteUser } = useCrud<User>('omapi_users', DEFAULT_USERS, addNotification);
 
   // 7b. Jobs
   const { items: jobs, saveItem: persistJob, deleteItem: deleteJobRecord } = useCrud<JobOffer>('omapi_jobs', DEFAULT_JOBS, addNotification);
@@ -445,7 +442,6 @@ export const useAdminData = () => {
       omapi_formation_registrations: formationRegistrations,
       omapi_gopi: gopiItems,
       omapi_gopi_orders: gopiOrders,
-      omapi_users: users,
       omapi_jobs: jobs,
       omapi_job_applications: jobApplications,
       omapi_events: events,
@@ -524,7 +520,7 @@ export const useAdminData = () => {
   }, [
     announcements, activityLogs, formationRegistrations, formations, gopiItems,
     gopiOrders, guides, forms, jobApplications, jobs, legislationItems,
-    newsItems, readNotifIds, slides, users, events, eventRegistrations,
+    newsItems, readNotifIds, slides, events, eventRegistrations,
   ]);
 
   const persistReadNotificationIds = (ids: string[]) => {
@@ -562,7 +558,6 @@ export const useAdminData = () => {
     formationRegistrations, saveFormationRegistration, deleteFormationRegistration,
     gopiItems, saveGopi, deleteGopi,
     gopiOrders, saveGopiOrder, updateGopiOrder, deleteGopiOrder,
-    users, saveUser, deleteUser,
     jobs, saveJob, deleteJob,
     jobApplications, saveJobApplication, deleteJobApplication,
     events, saveEvent, deleteEvent,

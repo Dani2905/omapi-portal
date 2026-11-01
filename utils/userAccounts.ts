@@ -1,17 +1,11 @@
 import type { User } from '../types';
-import { DEFAULT_USERS } from '../data/mocks/users';
-
 /**
- * Utilitaires de gestion des comptes du prototype.
- *
- * IMPORTANT : l'application ne dispose pas encore d'un backend.
- * L'empreinte ci-dessous évite de stocker un mot de passe en clair
- * dans localStorage, mais elle ne remplace pas une authentification
- * serveur (à réaliser avec l'API/PostgreSQL en production).
+ * Validations côté interface pour la gestion des comptes API.
+ * Les autorisations et les règles de sécurité sont également appliquées
+ * côté serveur; cette validation ne remplace jamais les contrôles PostgreSQL.
  */
 
-const principalAdminEmail = DEFAULT_USERS.find((user) => String(user.id) === '1')?.email.trim().toLowerCase();
-export const SUPER_ADMIN_EMAILS: readonly string[] = principalAdminEmail ? [principalAdminEmail] : [];
+export const SUPER_ADMIN_EMAILS: readonly string[] = [];
 
 export const ACCOUNT_DELETE_CONFIRMATION = 'SUPPRIMER';
 
@@ -57,16 +51,6 @@ export function validateUserDraft(
   }
 
   const currentId = currentUserId === undefined ? undefined : String(currentUserId);
-  const isReserved = SUPER_ADMIN_EMAILS.includes(email as typeof SUPER_ADMIN_EMAILS[number]);
-  const alreadyOwnsReservedEmail = existingUsers.some(
-    (user) => String(user.id) === currentId && normalizeEmail(user.email) === email,
-  );
-
-  if (isReserved && !alreadyOwnsReservedEmail) {
-    errors.email = 'Cette adresse est réservée au compte super administrateur existant.';
-    return errors;
-  }
-
   const duplicate = existingUsers.some(
     (user) => String(user.id) !== currentId && normalizeEmail(user.email) === email,
   );
@@ -82,10 +66,7 @@ export const isPrincipalAdminAccount = (
   user: Partial<User> | undefined,
 ): boolean => {
   if (!user) return false;
-  return String(user.id) === '1'
-    || SUPER_ADMIN_EMAILS.includes(
-      normalizeEmail(user.email) as typeof SUPER_ADMIN_EMAILS[number],
-    );
+  return String(user.id) === '1';
 };
 
 export const isActiveAdmin = (
@@ -182,8 +163,8 @@ export function validateNewPassword(password: string): string | undefined {
     return "Le mot de passe ne doit ni commencer ni se terminer par un espace.";
   }
 
-  if (password.length < 8) {
-    return 'Le mot de passe doit contenir au moins 8 caractères.';
+  if (password.length < 12) {
+    return 'Le mot de passe doit contenir au moins 12 caractères.';
   }
 
   return undefined;
