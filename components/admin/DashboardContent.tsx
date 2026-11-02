@@ -57,7 +57,7 @@ const DashboardContent: React.FC<DashboardContentProps> = ({ activeTab, setActiv
           onAdd={() => openModal('news', {
             title: '', description: '', category: 'Annonce', featured: false,
             date: new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }),
-            image: 'https://picsum.photos/800/600?random=' + Math.floor(Math.random() * 100)
+            image: ''
           })}
           onEdit={(item) => openModal('news', item)}
           onDelete={data.handleDeleteNews}
@@ -101,7 +101,7 @@ const DashboardContent: React.FC<DashboardContentProps> = ({ activeTab, setActiv
           registrations={data.eventRegistrations}
           onAdd={() => openModal('event', {
             title: '', date: '', time: '', location: '', description: '', status: 'À venir', places: 'Sur inscription',
-            image: 'https://picsum.photos/800/600?random=' + Math.floor(Math.random() * 100)
+            image: ''
           })}
           onEdit={(item) => openModal('event', item)}
           onDelete={data.deleteEvent}

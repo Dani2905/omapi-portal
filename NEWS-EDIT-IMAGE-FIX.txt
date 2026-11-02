@@ -1,0 +1,11 @@
+Correctif Centre Éditorial — actualités
+
+Fichiers à remplacer dans le clone du portail :
+- components/admin/NewsFormModal.tsx
+- components/admin/DashboardContent.tsx
+
+Aucun changement backend n’est requis. Après copie dans le clone, valider et pousser avec GitHub Desktop; Netlify déploiera automatiquement.
+
+Le correctif conserve l’identifiant d’une actualité pendant l’édition, empêche les doubles soumissions, retire le champ de saisie d’URL d’image et le visuel aléatoire par URL. Une image peut être importée depuis un fichier ou retirée. Les images déjà enregistrées par URL sont conservées tant qu’elles ne sont pas remplacées/retirées.
+
+Les articles déjà dupliqués dans la base ne sont pas supprimés automatiquement; vérifier lequel conserver puis supprimer l’autre depuis l’Admin.

@@ -3,37 +3,38 @@ import React, { useState, useEffect } from 'react';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import { NewsItem } from '../../types';
-import { isAllowedNewsImageUrl, MAX_NEWS_DESCRIPTION_LENGTH, MAX_NEWS_IMAGE_DATA_URL_LENGTH, MAX_NEWS_IMAGE_UPLOAD_BYTES, MAX_NEWS_TITLE_LENGTH, NEWS_CATEGORIES, normalizeNewsDraft, sanitizeNewsHtml, validateNewsDraft } from '../../utils/editorialLogic';
+import { MAX_NEWS_DESCRIPTION_LENGTH, MAX_NEWS_IMAGE_DATA_URL_LENGTH, MAX_NEWS_IMAGE_UPLOAD_BYTES, MAX_NEWS_TITLE_LENGTH, NEWS_CATEGORIES, normalizeNewsDraft, sanitizeNewsHtml, validateNewsDraft } from '../../utils/editorialLogic';
 import { 
-  XMarkIcon, PhotoIcon, ArrowPathIcon, TagIcon, CalendarIcon, 
+  XMarkIcon, PhotoIcon, TagIcon, CalendarIcon,
   NewspaperIcon, ArrowUpTrayIcon, StarIcon, EyeIcon
 } from './AdminIcons';
 
 interface NewsFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (news: Partial<NewsItem>) => void;
+  onSave: (news: Partial<NewsItem>) => Promise<boolean> | boolean;
   initialData: Partial<NewsItem>;
 }
 
 const NewsFormModal: React.FC<NewsFormModalProps> = ({ isOpen, onClose, onSave, initialData }) => {
   const [formData, setFormData] = useState<Partial<NewsItem>>({});
+  const [editingId, setEditingId] = useState<NewsItem['id'] | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
   const [formError, setFormError] = useState('');
 
   useEffect(() => {
     if (isOpen) {
       setFormData(initialData);
+      // Keep the original database id separate from editable form state so an edit
+      // can never silently fall back to POST/create and produce a duplicate.
+      setEditingId(initialData.id ?? null);
+      setIsSaving(false);
       setActiveTab('edit');
       setFormError('');
     }
   }, [isOpen, initialData]);
 
-  const generateRandomImage = () => {
-    const randomId = Math.floor(Math.random() * 1000);
-    setFormData((current) => ({ ...current, image: `https://picsum.photos/800/600?random=${randomId}` }));
-    setFormError('');
-  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const input = e.currentTarget;
@@ -96,8 +97,9 @@ const NewsFormModal: React.FC<NewsFormModalProps> = ({ isOpen, onClose, onSave, 
     reader.readAsDataURL(file);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     const normalized = normalizeNewsDraft(formData);
     const validationError = validateNewsDraft(normalized);
     if (validationError) {
@@ -105,8 +107,17 @@ const NewsFormModal: React.FC<NewsFormModalProps> = ({ isOpen, onClose, onSave, 
       setActiveTab('edit');
       return;
     }
+    // Re-attach the immutable id captured when opening an existing record.
+    const payload = editingId === null ? normalized : { ...normalized, id: editingId };
     setFormError('');
-    onSave(normalized);
+    setIsSaving(true);
+    try {
+      const saved = await onSave(payload);
+      if (!saved) setIsSaving(false);
+    } catch {
+      setIsSaving(false);
+      setFormError('La sauvegarde a échoué. Vos modifications restent dans ce formulaire; réessayez.');
+    }
   };
 
   // --- Toolbar config for ReactQuill ---
@@ -129,7 +140,7 @@ const NewsFormModal: React.FC<NewsFormModalProps> = ({ isOpen, onClose, onSave, 
             <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50 flex-shrink-0">
                 <div className="flex items-center gap-6">
                     <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
-                        {formData.id ? 'Éditer l\'actualité' : 'Ajouter une actualité'}
+                        {editingId !== null ? 'Éditer l\'actualité' : 'Ajouter une actualité'}
                     </h3>
                     <div className="flex bg-slate-200 p-0.5 text-[10px] font-bold uppercase tracking-tight">
                         <button
@@ -229,33 +240,22 @@ const NewsFormModal: React.FC<NewsFormModalProps> = ({ isOpen, onClose, onSave, 
                                                         <span className="text-[9px] font-bold uppercase tracking-tighter">Aucune image</span>
                                                     </div>
                                                 )}
-                                                <div className="absolute inset-0 bg-slate-900/40 flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                                    <button
-                                                        type="button"
-                                                        onClick={generateRandomImage}
-                                                        className="bg-white text-slate-900 text-[9px] font-bold uppercase tracking-widest px-2 py-1 border border-slate-300 hover:bg-slate-50"
-                                                    >
-                                                        <ArrowPathIcon className="w-3 h-3 inline mr-1" />
-                                                        Aléatoire
-                                                    </button>
-                                                </div>
                                             </div>
                                             
                                             <div className="space-y-2">
-                                                <input 
-                                                    type="text" 
-                                                    className="w-full px-2 py-1.5 border border-slate-300 text-[10px] text-slate-700 bg-white outline-none focus:border-slate-900 placeholder-slate-400 font-mono"
-                                                    value={formData.image || ''}
-                                                    onChange={e => setFormData({...formData, image: e.target.value})}
-                                                    placeholder="HTTPS://..."
-                                                />
-                                                {formData.image && !isAllowedNewsImageUrl(formData.image) && (
-                                                    <p role="alert" className="text-[10px] text-red-700">Lien d’image non valide : utilisez HTTPS ou importez un fichier image.</p>
-                                                )}
                                                 <label className="block w-full text-center px-2 py-1.5 border border-slate-300 border-dashed text-[9px] font-bold uppercase tracking-widest text-slate-500 cursor-pointer hover:bg-slate-100">
-                                                    <ArrowUpTrayIcon className="w-3 h-3 inline mr-1" /> Uploader
+                                                    <ArrowUpTrayIcon className="w-3 h-3 inline mr-1" /> Importer une image
                                                     <input type="file" className="hidden" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleImageUpload} />
                                                 </label>
+                                                {formData.image && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setFormData((current) => ({ ...current, image: '' }))}
+                                                        className="w-full px-2 py-1.5 border border-slate-200 text-[9px] font-bold uppercase tracking-widest text-slate-500 hover:bg-slate-100"
+                                                    >
+                                                        Supprimer l’image
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
 
@@ -345,9 +345,10 @@ const NewsFormModal: React.FC<NewsFormModalProps> = ({ isOpen, onClose, onSave, 
                         </button>
                         <button 
                             type="submit"
-                            className="px-6 py-2 bg-slate-900 text-white text-[11px] font-bold uppercase tracking-widest hover:bg-slate-800"
+                            disabled={isSaving}
+                            className="px-6 py-2 bg-slate-900 text-white text-[11px] font-bold uppercase tracking-widest hover:bg-slate-800 disabled:opacity-60 disabled:cursor-wait"
                         >
-                            Enregistrer l'article
+                            {isSaving ? 'Enregistrement…' : "Enregistrer l'article"}
                         </button>
                     </div>
                 </form>
