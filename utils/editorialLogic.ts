@@ -80,6 +80,7 @@ export function sanitizeNewsHtml(value: unknown): string {
   if (typeof value !== 'string' || !value.trim()) return '';
   if (typeof DOMParser === 'undefined') {
     return value
+      .replace(/&nbsp;|&#0*160;|&#x0*a0;|[\u00a0\u202f]/gi, ' ')
       .replace(/<\s*(script|style|iframe|object|embed|svg|math)[^>]*>[\s\S]*?<\/\s*\1\s*>/gi, '')
       .replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
       .replace(/(href|src)\s*=\s*(["'])\s*javascript:[\s\S]*?\2/gi, '$1="#"');
@@ -88,6 +89,10 @@ export function sanitizeNewsHtml(value: unknown): string {
   const document = new DOMParser().parseFromString(value, 'text/html');
   const sanitizeChildren = (parent: ParentNode) => {
     Array.from(parent.childNodes).forEach((node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        node.textContent = (node.textContent || '').replace(/[\u00a0\u202f]/g, ' ');
+        return;
+      }
       if (!(node instanceof Element)) return;
       const tag = node.tagName.toLowerCase();
       if (DROP_RICH_TAGS.has(tag)) {

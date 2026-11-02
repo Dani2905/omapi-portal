@@ -44,6 +44,8 @@ const sanitized = sanitizeNewsHtml('<p onclick="bad()">Texte <script>bad()</scri
 assert.equal(sanitized.includes('<script>'), false);
 assert.equal(sanitized.toLowerCase().includes('onclick='), false);
 assert.equal(sanitized.toLowerCase().includes('href="javascript:'), false);
+assert.equal(sanitizeNewsHtml('<p>La baie&nbsp;rose de Bongolava</p>'), '<p>La baie rose de Bongolava</p>');
+assert.equal(sanitizeNewsHtml('<p>Un atelier\u00a0important</p>'), '<p>Un atelier important</p>');
 
 console.log('Centre éditorial test 4 — classement des dates françaises et catégories d’accueil');
 assert.ok(parseEditorialDate('12 Octobre 2026')! > parseEditorialDate('08 Octobre 2026')!);

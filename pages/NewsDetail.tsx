@@ -102,13 +102,13 @@ const NewsDetail: React.FC = () => {
                             <style>{`
                                 .rich-content {
                                     word-break: normal;
-                                    overflow-wrap: normal;
+                                    overflow-wrap: break-word;
                                     hyphens: none;
                                 }
                                 .rich-content * {
                                     max-width: 100%;
                                     word-break: normal;
-                                    overflow-wrap: normal;
+                                    overflow-wrap: break-word;
                                     hyphens: none;
                                 }
                                 .rich-content h2 { font-size: 1.5rem; font-weight: 700; color: #1f2937; margin-top: 2rem; margin-bottom: 1rem; }

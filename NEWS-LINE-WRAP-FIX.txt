@@ -1,8 +1,11 @@
-Correctif de retour à la ligne du texte Actualité
+Correctif du retour à la ligne du contenu des actualités
 
-Remplacer dans le clone du portail le fichier :
+Remplacer dans le clone du portail :
 - pages/NewsDetail.tsx
+- utils/editorialLogic.ts
 
-Le correctif retire le mode de césure forcée appliqué au texte et impose une coupure normale aux espaces pour éviter les mots fragmentés en fin de ligne.
+Le contenu contient des espaces insécables (&nbsp; / U+00A0) entre plusieurs mots. Ils empêchaient les retours à la ligne normaux. Le correctif les normalise en espaces ordinaires avant affichage et garde une césure de secours sans couper les mots ordinaires.
+
+Le fichier tests/editorialLogic.test.ts dans cette archive ajoute les tests de régression; il peut aussi être copié à son emplacement correspondant.
 
 Après remplacement, valider et pousser avec GitHub Desktop, puis attendre le déploiement du site.
