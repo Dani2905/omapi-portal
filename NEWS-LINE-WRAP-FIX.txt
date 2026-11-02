@@ -1,0 +1,8 @@
+Correctif de retour à la ligne du texte Actualité
+
+Remplacer dans le clone du portail le fichier :
+- pages/NewsDetail.tsx
+
+Le correctif retire le mode de césure forcée appliqué au texte et impose une coupure normale aux espaces pour éviter les mots fragmentés en fin de ligne.
+
+Après remplacement, valider et pousser avec GitHub Desktop, puis attendre le déploiement du site.

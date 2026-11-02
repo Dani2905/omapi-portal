@@ -94,17 +94,23 @@ const NewsDetail: React.FC = () => {
                         </p>
 
                         {/* Body Content - Rich Text Rendering */}
-                        <div className="prose prose-lg text-gray-600 max-w-none break-words">
+                        <div className="prose prose-lg text-gray-600 max-w-none">
                             {/* 
                                 Style manuel pour les éléments HTML injectés car nous n'avons pas le plugin @tailwindcss/typography
                                 configuré dans index.html pour la classe 'prose' standard.
                             */}
                             <style>{`
-                                .rich-content { 
-                                    word-wrap: break-word; 
-                                    overflow-wrap: break-word; 
+                                .rich-content {
+                                    word-break: normal;
+                                    overflow-wrap: normal;
+                                    hyphens: none;
                                 }
-                                .rich-content * { max-width: 100%; }
+                                .rich-content * {
+                                    max-width: 100%;
+                                    word-break: normal;
+                                    overflow-wrap: normal;
+                                    hyphens: none;
+                                }
                                 .rich-content h2 { font-size: 1.5rem; font-weight: 700; color: #1f2937; margin-top: 2rem; margin-bottom: 1rem; }
                                 .rich-content h3 { font-size: 1.25rem; font-weight: 600; color: #374151; margin-top: 1.5rem; margin-bottom: 0.75rem; }
                                 .rich-content p { margin-bottom: 1rem; line-height: 1.75; white-space: normal; }
