@@ -2,9 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
-import { DEFAULT_LEGISLATION } from '../constants';
 import { LegislationItem } from '../types';
-import { useCrud } from '../hooks/useCrud';
+import { useApiLibrary } from '../hooks/useApiLibrary';
 import { isAllowedLegislationUrl } from '../utils/legislationLogic';
 
 // --- Icons ---
@@ -39,7 +38,7 @@ const BookOpenIcon = ({ className }: { className?: string }) => (
 );
 
 const Legislation: React.FC = () => {
-  const { items: legislationItems } = useCrud<LegislationItem>('omapi_legislation', DEFAULT_LEGISLATION);
+  const { legislationItems, loading, error } = useApiLibrary(undefined, 'legislation');
 
   const fundamentalTexts = legislationItems.filter(item => item.category === 'Fondamental');
   const applicationTexts = legislationItems.filter(item => item.category === 'Application');
@@ -97,6 +96,10 @@ const Legislation: React.FC = () => {
             <p className="text-xl text-secondary font-medium">Textes juridiques régissant la propriété industrielle à Madagascar</p>
             <div className="w-24 h-1.5 bg-primary rounded-full mt-4"></div>
         </div>
+
+        {error && <div role="alert" className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Les textes de législation sont temporairement indisponibles. Réessayez dans quelques instants.</div>}
+        {loading && legislationItems.length === 0 && <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 text-center text-gray-500">Chargement des textes…</div>}
+        {!loading && !error && legislationItems.length === 0 && <div className="mb-6 rounded-lg border border-gray-200 bg-white p-6 text-center text-gray-600">Aucun texte juridique n’est actuellement publié.</div>}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
           {/* Main Content */}

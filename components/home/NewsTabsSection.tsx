@@ -6,10 +6,12 @@ import { ArrowRightIcon, NewspaperIcon, ChatBubbleLeftRightIcon, DocumentTextIco
 import { useApiEditorial } from '../../hooks/useApiEditorial';
 import type { NewsItem } from '../../types';
 import { getHomepageNewsSection, sortNewsItems } from '../../utils/editorialLogic';
+import { useApiSiteSettings } from '../../hooks/useApiSiteSettings';
 
 const NewsTabsSection: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'news' | 'blog' | 'remarks'>('news');
   const { newsItems } = useApiEditorial(undefined, 'news');
+  const { siteConfig } = useApiSiteSettings();
 
   // Tous les contenus restent visibles : seuls Blog et Déclaration ont
   // des onglets dédiés, les autres catégories appartiennent aux actualités.
@@ -98,7 +100,9 @@ const NewsTabsSection: React.FC = () => {
 
   return (
     <div className="container mx-auto max-w-7xl px-4 lg:px-8 mb-16 font-sans mt-8">
-      <section className="bg-white">
+      <section className="relative overflow-hidden bg-white">
+        {siteConfig.newsSectionBgImage && <img src={siteConfig.newsSectionBgImage} alt="" aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-[0.08]" onError={(event) => { event.currentTarget.style.display = 'none'; }} />}
+        <div className="relative z-10">
         <div className="flex flex-col md:flex-row md:items-end justify-between border-b border-stone-200 pb-4 mb-8">
           <div>
             <div className="text-xs font-semibold uppercase tracking-widest text-stone-500 mb-1">
@@ -159,6 +163,7 @@ const NewsTabsSection: React.FC = () => {
               <ArrowRightIcon className="w-4 h-4 ml-3 group-hover:translate-x-1 transition-transform" />
             </Link>
           </div>
+        </div>
         </div>
 
       </section>

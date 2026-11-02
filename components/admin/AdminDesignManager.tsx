@@ -5,7 +5,7 @@ import { CheckIcon, SwatchIcon } from './AdminIcons';
 
 interface AdminDesignManagerProps {
   config: SiteConfig;
-  onSave: (config: SiteConfig) => void;
+  onSave: (config: SiteConfig) => Promise<boolean> | boolean | void;
 }
 
 const AdminDesignManager: React.FC<AdminDesignManagerProps> = ({ config, onSave }) => {
@@ -14,6 +14,8 @@ const AdminDesignManager: React.FC<AdminDesignManagerProps> = ({ config, onSave 
   };
   const [localConfig, setLocalConfig] = useState<SiteConfig>(config || defaultConfig);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (config) {
@@ -26,10 +28,23 @@ const AdminDesignManager: React.FC<AdminDesignManagerProps> = ({ config, onSave 
     setLocalConfig(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSave = () => {
-    onSave(localConfig);
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
+  const handleSave = async () => {
+    setSaving(true);
+    setError('');
+    setShowSuccess(false);
+    try {
+      const saved = await onSave(localConfig);
+      if (saved === false) {
+        setError('La sauvegarde a échoué. Vos réglages restent dans le formulaire ; réessayez.');
+        return;
+      }
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+    } catch {
+      setError('La sauvegarde a échoué. Vos réglages restent dans le formulaire ; réessayez.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -67,6 +82,7 @@ const AdminDesignManager: React.FC<AdminDesignManagerProps> = ({ config, onSave 
                 </div>
             </div>
 
+            {error && <p role="alert" className="mt-6 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
             <div className="border-t border-slate-100 mt-8 pt-6">
                  <h3 className="text-[10px] font-bold text-slate-500 mb-4 uppercase tracking-widest">Aperçu de l'image</h3>
                  {localConfig.newsSectionBgImage ? (
@@ -90,8 +106,9 @@ const AdminDesignManager: React.FC<AdminDesignManagerProps> = ({ config, onSave 
 
             <div className="flex justify-end pt-8">
                 <button 
-                    onClick={handleSave}
-                    className="flex items-center px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-sm border border-blue-700 transition-all active:scale-95"
+                    onClick={() => void handleSave()}
+                    disabled={saving}
+                    className="flex items-center px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-sm border border-blue-700 transition-all active:scale-95 disabled:opacity-60 disabled:cursor-wait"
                 >
                     {showSuccess ? (
                         <>
@@ -99,7 +116,7 @@ const AdminDesignManager: React.FC<AdminDesignManagerProps> = ({ config, onSave 
                             <span className="text-[10px] font-bold uppercase tracking-widest">Enregistré !</span>
                         </>
                     ) : (
-                        <span className="text-[10px] font-bold uppercase tracking-widest">Enregistrer les modifications</span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest">{saving ? 'Enregistrement…' : 'Enregistrer les modifications'}</span>
                     )}
                 </button>
             </div>

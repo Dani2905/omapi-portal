@@ -2,12 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ClockIcon, PlayCircleIcon } from '../admin/AdminIcons';
-import { HomeResourcesConfig } from '../../types';
-import { useObjectStorage } from '../../hooks/useCrud';
+import { useApiSiteSettings } from '../../hooks/useApiSiteSettings';
 import { DEFAULT_HOME_RESOURCES_CONFIG, normalizeHomeResourcesConfig, normalizeResourceUrl } from '../../data/homeResources';
 
 const FeaturedResourcesSection: React.FC = () => {
-  const [storedConfig] = useObjectStorage<HomeResourcesConfig>('omapi_home_resources', DEFAULT_HOME_RESOURCES_CONFIG);
+  const { homeResourcesConfig: storedConfig } = useApiSiteSettings();
   const config = normalizeHomeResourcesConfig(storedConfig);
   const videoHref = normalizeResourceUrl(config.videoUrl, '/guides');
   const isVideoLinkConfigured = Boolean(config.videoUrl?.trim());

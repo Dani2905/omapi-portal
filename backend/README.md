@@ -1,6 +1,6 @@
 # OMAPI API (cPanel)
 
-Application Express dédiée à OMAPI, séparée du site et des données du Cabinet. Le service comprend les contrôles de santé PostgreSQL, l'authentification Admin et la mise à jour sécurisée du profil. Les données CRUD métier restent encore locales au front-end.
+Application Express dédiée à OMAPI, séparée du site et des données du Cabinet. Le service comprend les contrôles de santé PostgreSQL, l'authentification Admin, la gestion des comptes autorisés et le stockage API des contenus OMAPI. Exécuter le script de création `schema/create_resources_library_settings.sql` sur la base `ciprabem_omapi_portal` avant de déployer cette version. Les anciennes copies localStorage ne sont jamais importées; après une réponse API réussie, le portail retire seulement les clés locales de formulaires, guides, législation et réglages, sans toucher aux autres données du navigateur.
 
 ## cPanel Setup Node.js App
 
@@ -41,7 +41,12 @@ Ne placez aucun mot de passe, jeton ou secret dans GitHub, Netlify ou les fichie
 - `POST /api/admin/users` — création d’un compte; le mot de passe est haché côté serveur.
 - `PATCH /api/admin/users/:id` — modification du compte, des droits et du mot de passe temporaire éventuel.
 - `DELETE /api/admin/users/:id` — suppression protégée contre l’auto-suppression, la suppression du compte principal et celle du dernier Admin actif.
+- `GET /api/content/forms|guides|legislation` — lecture publique des formulaires, guides et textes législatifs.
+- `POST|PATCH|DELETE /api/admin/library/:collection[/:id]` — gestion sécurisée des trois collections par Admin/Éditeur.
+- `GET /api/content/settings` — lecture publique des réglages autorisés.
+- `PUT /api/admin/settings/site_config|home_resources` — sauvegarde sécurisée des réglages du site et des ressources d’accueil.
+- Les anciennes routes éditoriales restent disponibles pour actualités, carrousel et annonces.
 
 Les mots de passe sont hachés avec scrypt; seuls les condensats des jetons de session sont stockés dans PostgreSQL. Les secrets ne sont jamais renvoyés dans les réponses.
 
-Le formulaire de connexion Netlify, la vérification du guard Admin, la déconnexion, la modification du profil et la gestion des comptes Admin/Éditeur utilisent ces routes. Le jeton Bearer est conservé dans `sessionStorage` (onglet courant). Les autres données/CRUD de l'administration restent pour l'instant côté navigateur; les comptes de démonstration locaux ne sont pas importés automatiquement et aucune migration des candidatures web n'est incluse.
+Le formulaire de connexion Netlify, la vérification du guard Admin, la déconnexion, la modification du profil, la gestion des comptes et ces trois modules documentaires utilisent les routes API. Le jeton Bearer est conservé dans `sessionStorage` (onglet courant). Les autres CRUD non mentionnés restent locaux. Les copies localStorage des trois modules raccordés sont laissées intactes mais ne sont pas lues/importées par les pages raccordées; aucune donnée locale n'est effacée automatiquement.

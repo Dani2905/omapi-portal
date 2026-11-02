@@ -1,19 +1,17 @@
 import React, { useMemo } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { useCrud } from '../hooks/useCrud';
+import { useApiLibrary } from '../hooks/useApiLibrary';
 import { useApiEditorial } from '../hooks/useApiEditorial';
 import { getLibraryPlainText } from '../utils/documentLibraryLogic';
 import { getNewsPlainText } from '../utils/editorialLogic';
 import { normalizeEventRecord } from '../utils/eventLogic';
-import { LegislationItem, Formulaire, Guide, Formation, Event, GopiItem } from '../types';
+import { Formation, Event, GopiItem } from '../types';
 import Breadcrumb from '../components/Breadcrumb';
-import { 
-  DEFAULT_LEGISLATION, 
-  DEFAULT_FORMS, 
-  DEFAULT_GUIDES, 
-  DEFAULT_FORMATIONS, 
-  DEFAULT_EVENTS, 
-  DEFAULT_GOPI 
+import {
+  DEFAULT_FORMATIONS,
+  DEFAULT_EVENTS,
+  DEFAULT_GOPI,
 } from '../constants';
 
 const SearchResults: React.FC = () => {
@@ -23,9 +21,7 @@ const SearchResults: React.FC = () => {
   const lowerQuery = query.toLowerCase();
 
   const { newsItems: news } = useApiEditorial(undefined, 'news');
-  const { items: legislation } = useCrud<LegislationItem>('omapi_legislation', DEFAULT_LEGISLATION);
-  const { items: forms } = useCrud<Formulaire>('omapi_forms', DEFAULT_FORMS);
-  const { items: guides } = useCrud<Guide>('omapi_guides', DEFAULT_GUIDES);
+  const { forms, guides, legislationItems: legislation } = useApiLibrary(undefined);
   const { items: formations } = useCrud<Formation>('omapi_formations', DEFAULT_FORMATIONS);
   const { items: events } = useCrud<Event>('omapi_events', DEFAULT_EVENTS);
   const { items: gopi } = useCrud<GopiItem>('omapi_gopi', DEFAULT_GOPI);

@@ -1,0 +1,21 @@
+Raccordement API OMAPI — ressources, formulaires, guides et législation
+
+Ordre de mise en production :
+
+1) Base PostgreSQL OMAPI uniquement
+   Dans phpPgAdmin/cPanel, sélectionner la base utilisée par l’application Node OMAPI (ciprabem_omapi_portal) et exécuter une seule fois le fichier backend/schema/create_resources_library_settings.sql. Ne pas exécuter ce SQL sur la base du Cabinet.
+
+2) API Node OMAPI
+   Remplacer le fichier app.js du dossier racine de l’application Node OMAPI par backend/app.js, puis redémarrer l’application dans cPanel. Aucune nouvelle dépendance npm n’est requise. Ne pas copier de mot de passe ou de secret dans le dépôt.
+
+3) Portail Netlify
+   Copier les fichiers frontend de l’archive dans les chemins correspondants du clone. Ouvrir GitHub Desktop, vérifier les changements, valider puis pousser; attendre la fin du déploiement Netlify.
+
+Données : les tables API démarrent vides; aucun contenu local n’est importé. Après qu’un navigateur a reçu une réponse API réussie pour la collection ou les réglages concernés, le portail supprime uniquement les anciennes clés localStorage `omapi_forms`, `omapi_guides`, `omapi_legislation`, `omapi_site_config` et `omapi_home_resources`. Les autres clés du navigateur ne sont pas touchées. Comme localStorage est propre à chaque navigateur/appareil, cette suppression se fera sur chaque appareil lors de sa prochaine visite après le déploiement. Créer les nouveaux contenus depuis l’administration.
+
+Fonctionnalités raccordées :
+- Ressources d’accueil et image de fond de la section Actualités : sauvegarde partagée dans PostgreSQL.
+- Formulaires et guides : création, lecture publique, modification, suppression et recherche via l’API.
+- Législation : création, lecture publique, modification, suppression et recherche via l’API.
+
+Le SQL crée seulement quatre tables OMAPI : content_forms, content_guides, content_legislation et site_settings. Il ne modifie pas les tables existantes du Cabinet.

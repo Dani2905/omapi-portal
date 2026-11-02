@@ -86,7 +86,7 @@ const AdminResourcesManager: React.FC<AdminResourcesManagerProps> = ({ config, o
       const normalized = normalizeHomeResourcesConfig(localConfig);
       const result = await onSave(normalized);
       if (result === false) {
-        setErrorMessage('La sauvegarde a échoué. Vos modifications restent dans le formulaire ; vérifiez l’espace disponible dans le navigateur et réessayez.');
+        setErrorMessage('La sauvegarde a échoué. Vos modifications restent dans le formulaire ; réessayez ou contactez l’administrateur si le problème persiste.');
         return;
       }
       setLocalConfig(normalized);
@@ -139,7 +139,7 @@ const AdminResourcesManager: React.FC<AdminResourcesManagerProps> = ({ config, o
         {showSuccess && <div role="status" className="mt-7 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800"><Check className="h-4 w-4" />Ressources enregistrées et prêtes à être affichées.</div>}
 
         <div className="mt-8 flex flex-col-reverse gap-3 border-t border-slate-100 pt-6 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs text-slate-500">Les images sont redimensionnées et compressées avant leur sauvegarde locale.</p>
+          <p className="text-xs text-slate-500">Les images sont redimensionnées et compressées avant leur sauvegarde dans la base OMAPI.</p>
           <button type="button" disabled={saving || uploading !== null} onClick={handleSave} className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-slate-700 disabled:cursor-wait disabled:opacity-60">
             {saving ? <span className="animate-pulse">Enregistrement…</span> : <><Save className="h-4 w-4" />{showSuccess ? 'Enregistré' : 'Enregistrer les ressources'}</>}
           </button>

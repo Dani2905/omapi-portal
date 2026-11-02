@@ -1,16 +1,17 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCrud, useObjectStorage } from './useCrud';
-import { DEFAULT_FORMS, DEFAULT_GUIDES, DEFAULT_FORMATIONS, DEFAULT_FORMATION_REGISTRATIONS, DEFAULT_GOPI, DEFAULT_GOPI_ORDERS, DEFAULT_EVENTS, DEFAULT_EVENT_REGISTRATIONS, DEFAULT_LEGISLATION, DEFAULT_JOBS } from '../constants';
+import { DEFAULT_FORMATIONS, DEFAULT_FORMATION_REGISTRATIONS, DEFAULT_GOPI, DEFAULT_GOPI_ORDERS, DEFAULT_EVENTS, DEFAULT_EVENT_REGISTRATIONS, DEFAULT_JOBS } from '../constants';
 import { useApiEditorial } from './useApiEditorial';
+import { useApiLibrary } from './useApiLibrary';
+import { useApiSiteSettings } from './useApiSiteSettings';
 import { describeCrudAction } from '../utils/notificationMessages';
 import { canTransitionGopiOrder, GOPI_PAYMENT_METHODS } from '../utils/gopiLogic';
 import { normalizeAnnouncementDraft, validateAnnouncementText } from '../utils/announcementLogic';
 import { normalizeNewsDraft, validateNewsDraft } from '../utils/editorialLogic';
 import { JOB_STATUSES, normalizeJobOfferDraft, validateJobOfferDraft } from '../utils/jobLogic';
 import { normalizeEventDraft, normalizeEventRegistrationDraft, validateEventDraft, validateEventRegistrationDraft } from '../utils/eventLogic';
-import { DEFAULT_HOME_RESOURCES_CONFIG } from '../data/homeResources';
-import { Slide, NewsItem, Announcement, Formulaire, Guide, Formation, FormationRegistration, JobOffer, JobApplication, GopiItem, GopiOrder, Event, EventRegistration, LegislationItem, Notification, SystemNotification, SiteConfig, HomeResourcesConfig, ActivityLog } from '../types';
+import { Slide, NewsItem, Announcement, Formation, FormationRegistration, JobOffer, JobApplication, GopiItem, GopiOrder, Event, EventRegistration, Notification, SystemNotification, ActivityLog } from '../types';
 
 const READ_NOTIFICATIONS_KEY = 'omapi_read_notifications';
 
@@ -70,6 +71,10 @@ export const useAdminData = () => {
   // only after the API has returned successfully. Other modules remain local. ---
   const editorial = useApiEditorial(addNotification);
   const { slides, newsItems, announcements } = editorial;
+  const library = useApiLibrary(addNotification);
+  const { forms, guides, legislationItems, saveForm, saveGuide, saveLegislation, deleteForm, deleteGuide, deleteLegislation } = library;
+  const siteSettings = useApiSiteSettings(addNotification);
+  const { siteConfig, homeResourcesConfig, saveSiteConfig, saveHomeResourcesConfig } = siteSettings;
   const saveSlide = async (draft: Partial<Slide>): Promise<boolean> => Boolean(await editorial.saveSlide(draft));
   const deleteSlide = editorial.deleteSlide;
   const deleteAnnouncement = editorial.deleteAnnouncement;
@@ -88,9 +93,7 @@ export const useAdminData = () => {
     return Boolean(await editorial.saveAnnouncement(normalized));
   };
 
-  // 4. Forms & Guides
-  const { items: forms, saveItem: saveForm, deleteItem: deleteForm } = useCrud<Formulaire>('omapi_forms', DEFAULT_FORMS, addNotification);
-  const { items: guides, saveItem: saveGuide, deleteItem: deleteGuide } = useCrud<Guide>('omapi_guides', DEFAULT_GUIDES, addNotification);
+  // 4. Formulaires et guides : API OMAPI; les anciennes copies localStorage restent intactes.
 
   // 5. Formations
   const { items: formations, saveItem: saveFormation, deleteItem: deleteFormationBase } = useCrud<Formation>('omapi_formations', DEFAULT_FORMATIONS, addNotification);
@@ -308,13 +311,7 @@ export const useAdminData = () => {
     return persistEventRegistration(normalized);
   };
 
-  // 9. Legislation
-  const { items: legislationItems, saveItem: saveLegislation, deleteItem: deleteLegislation } = useCrud<LegislationItem>('omapi_legislation', DEFAULT_LEGISLATION, addNotification);
-
-  // 10. Site Configs
-  const [siteConfig, saveSiteConfig] = useObjectStorage<SiteConfig>('omapi_site_config', {}, addNotification);
-
-  const [homeResourcesConfig, saveHomeResourcesConfig] = useObjectStorage<HomeResourcesConfig>('omapi_home_resources', DEFAULT_HOME_RESOURCES_CONFIG, addNotification);
+  // 9. Législation et réglages du site : API OMAPI; aucune copie locale n'est effacée ni importée.
 
 
   // Les actualités à la une génèrent leurs slides directement depuis leur fiche.

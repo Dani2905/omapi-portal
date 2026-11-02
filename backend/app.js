@@ -109,6 +109,136 @@ const editorialConfig = {
   },
 };
 
+
+const FORM_CATEGORIES = ['Marques', 'Brevets', 'Dessins', 'Autres'];
+const GUIDE_ICONS = ['tag', 'bulb', 'swatch', 'book', 'globe', 'banknotes'];
+const GUIDE_THEMES = ['blue', 'amber', 'purple', 'emerald', 'orange', 'gray'];
+const LEGISLATION_CATEGORIES = ['Fondamental', 'Application', 'Autre'];
+const LEGISLATION_TYPES = ['Loi', 'Ordonnance', 'Décret', 'Arrêté', 'Autre'];
+const libraryConfig = {
+  forms: {
+    table: 'content_forms',
+    select: 'id, title, description, category, file_url, file_name',
+    dbColumns: ['title', 'description', 'category', 'file_url', 'file_name'],
+    normalize(body) {
+      const item = {
+        title: cleanText(body?.title, 150),
+        description: cleanText(body?.description, 5000),
+        category: cleanText(body?.category, 30),
+        fileUrl: typeof body?.fileUrl === 'string' ? body.fileUrl.trim() : '',
+        fileName: cleanText(body?.fileName, 120),
+      };
+      if (item.title.length < 3 || !FORM_CATEGORIES.includes(item.category) || !isSafeLibraryFileValue(item.fileUrl)) {
+        return { error: 'Form item is invalid' };
+      }
+      return { item };
+    },
+    values: (item) => [item.title, item.description, item.category, item.fileUrl, item.fileName],
+    mapRow: (row) => ({ id: Number(row.id), title: row.title, description: row.description, category: row.category, fileUrl: row.file_url, fileName: row.file_name || '' }),
+  },
+  guides: {
+    table: 'content_guides',
+    select: 'id, title, description, icon_name, points, color_theme, file_url, file_name',
+    dbColumns: ['title', 'description', 'icon_name', 'points', 'color_theme', 'file_url', 'file_name'],
+    normalize(body) {
+      const points = Array.isArray(body?.points) ? body.points.filter((point) => typeof point === 'string').map((point) => point.trim()).filter(Boolean) : [];
+      const item = {
+        title: cleanText(body?.title, 150),
+        description: cleanText(body?.description, 5000),
+        iconName: cleanText(body?.iconName, 30),
+        points,
+        colorTheme: cleanText(body?.colorTheme, 30),
+        fileUrl: typeof body?.fileUrl === 'string' ? body.fileUrl.trim() : '',
+        fileName: cleanText(body?.fileName, 120),
+      };
+      if (item.title.length < 3 || !GUIDE_ICONS.includes(item.iconName) || !GUIDE_THEMES.includes(item.colorTheme) || points.length > 20 || points.some((point) => point.length > 180) || !isSafeLibraryFileValue(item.fileUrl)) {
+        return { error: 'Guide item is invalid' };
+      }
+      return { item };
+    },
+    values: (item) => [item.title, item.description, item.iconName, JSON.stringify(item.points), item.colorTheme, item.fileUrl, item.fileName],
+    mapRow: (row) => ({ id: Number(row.id), title: row.title, description: row.description, iconName: row.icon_name, points: Array.isArray(row.points) ? row.points : [], colorTheme: row.color_theme, fileUrl: row.file_url, fileName: row.file_name || '' }),
+  },
+  legislation: {
+    table: 'content_legislation',
+    select: 'id, title, category, type, display_date, description, file_url, file_name',
+    dbColumns: ['title', 'category', 'type', 'display_date', 'description', 'file_url', 'file_name'],
+    normalize(body) {
+      const item = {
+        title: cleanText(body?.title, 240),
+        category: cleanText(body?.category, 30),
+        type: cleanText(body?.type, 30),
+        date: cleanText(body?.date, 100),
+        description: cleanText(body?.description, 5000),
+        fileUrl: typeof body?.fileUrl === 'string' ? body.fileUrl.trim() : '',
+        fileName: cleanText(body?.fileName, 120),
+      };
+      if (item.title.length < 3 || !LEGISLATION_CATEGORIES.includes(item.category) || !LEGISLATION_TYPES.includes(item.type) || !item.date || !isSafeLegislationFileValue(item.fileUrl)) {
+        return { error: 'Legislation item is invalid' };
+      }
+      return { item };
+    },
+    values: (item) => [item.title, item.category, item.type, item.date, item.description, item.fileUrl, item.fileName],
+    mapRow: (row) => ({ id: Number(row.id), title: row.title, category: row.category, type: row.type, date: row.display_date, description: row.description, fileUrl: row.file_url, fileName: row.file_name || '' }),
+  },
+};
+
+function cleanText(value, maximum) {
+  return typeof value === 'string' ? value.trim().slice(0, maximum) : '';
+}
+
+function isSafeLibraryFileValue(value) {
+  if (!value || typeof value !== 'string' || value.length > 2_800_000 || /[\u0000-\u0020]/.test(value)) return false;
+  if (/^data:(?:application\/pdf|application\/msword|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document);base64,[a-z0-9+/=]+$/i.test(value)) return true;
+  if (value.startsWith('/') && !value.startsWith('//') && !value.includes('\\') && !value.split('/').includes('..')) return true;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'https:' && Boolean(parsed.hostname) && !parsed.username && !parsed.password;
+  } catch {
+    return false;
+  }
+}
+
+function isSafeLegislationFileValue(value) {
+  if (!isSafeLibraryFileValue(value)) return false;
+  return !value.startsWith('data:') || /^data:application\/pdf;base64,[a-z0-9+/=]+$/i.test(value);
+}
+
+function libraryTable(collection) {
+  return libraryConfig[collection] || null;
+}
+
+const SITE_SETTING_KEYS = ['site_config', 'home_resources'];
+
+function normalizeSiteSetting(key, value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return { error: 'Setting value is invalid' };
+  if (key === 'site_config') {
+    const image = typeof value.newsSectionBgImage === 'string' ? value.newsSectionBgImage.trim() : '';
+    if (image && !isSafeImageValue(image)) return { error: 'Site configuration image is invalid' };
+    return { value: image ? { newsSectionBgImage: image } : {} };
+  }
+  if (key === 'home_resources') {
+    const item = {
+      omapiHourTitle: cleanText(value.omapiHourTitle, 100),
+      omapiHourDesc: cleanText(value.omapiHourDesc, 500),
+      omapiHourThumbnail: typeof value.omapiHourThumbnail === 'string' ? value.omapiHourThumbnail.trim() : '',
+      omapiHourUrl: typeof value.omapiHourUrl === 'string' ? value.omapiHourUrl.trim() : '',
+      videoTitle: cleanText(value.videoTitle, 100),
+      videoDesc: cleanText(value.videoDesc, 500),
+      videoThumbnail: typeof value.videoThumbnail === 'string' ? value.videoThumbnail.trim() : '',
+      videoDuration: cleanText(value.videoDuration, 12),
+      videoUrl: typeof value.videoUrl === 'string' ? value.videoUrl.trim() : '',
+    };
+    const safeResourceLink = (link) => !link || isSafeLinkValue(link) || /^http:\/\//i.test(link);
+    const safeResourceImage = (image) => !image || isSafeImageValue(image) && image.length <= 1_500_000;
+    if (!item.omapiHourTitle || !item.omapiHourDesc || !item.videoTitle || !item.videoDesc || !safeResourceImage(item.omapiHourThumbnail) || !safeResourceImage(item.videoThumbnail) || !safeResourceLink(item.omapiHourUrl) || !safeResourceLink(item.videoUrl) || item.videoDuration && !/^(?:\d{1,2}:)?\d{1,2}:[0-5]\d$/.test(item.videoDuration)) {
+      return { error: 'Home resources configuration is invalid' };
+    }
+    return { value: item };
+  }
+  return { error: 'Setting key not found' };
+}
+
 function isSafeImageValue(value) {
   if (!value) return true;
   if (value.length > 2_100_000 || /[\u0000-\u0020]/.test(value)) return false;
@@ -590,9 +720,22 @@ app.delete('/api/admin/users/:id', requireAuth, requireAdmin, async (request, re
 });
 
 
+app.get('/api/content/settings', async (_request, response) => {
+  response.set('Cache-Control', 'no-store');
+  try {
+    const { rows } = await pool.query('SELECT setting_key, value FROM site_settings WHERE setting_key = ANY($1::text[])', [SITE_SETTING_KEYS]);
+    const settings = Object.fromEntries(SITE_SETTING_KEYS.map((key) => [key, null]));
+    for (const row of rows) settings[row.setting_key] = row.value;
+    return response.json({ settings });
+  } catch {
+    console.error('OMAPI public settings read failed');
+    return response.status(503).json({ error: 'Settings service unavailable' });
+  }
+});
+
 app.get('/api/content/:collection', async (request, response) => {
   response.set('Cache-Control', 'no-store');
-  const config = editorialTable(request.params.collection);
+  const config = editorialTable(request.params.collection) || libraryTable(request.params.collection);
   if (!config) return response.status(404).json({ error: 'Content collection not found' });
   try {
     const { rows } = await pool.query(`SELECT ${config.select} FROM ${config.table} ORDER BY id ASC`);
@@ -672,6 +815,100 @@ app.delete('/api/admin/editorial/:collection/:id', requireAuth, requireContentMa
   } catch {
     console.error('OMAPI editorial delete failed');
     return response.status(503).json({ error: 'Content service unavailable' });
+  }
+});
+
+
+
+
+app.get('/api/admin/library/:collection', requireAuth, requireContentManager, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const config = libraryTable(request.params.collection);
+  if (!config) return response.status(404).json({ error: 'Library collection not found' });
+  try {
+    const { rows } = await pool.query(`SELECT ${config.select} FROM ${config.table} ORDER BY id ASC`);
+    return response.json({ items: rows.map(config.mapRow) });
+  } catch {
+    console.error('OMAPI library read failed');
+    return response.status(503).json({ error: 'Library service unavailable' });
+  }
+});
+
+app.post('/api/admin/library/:collection', requireAuth, requireContentManager, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const config = libraryTable(request.params.collection);
+  if (!config) return response.status(404).json({ error: 'Library collection not found' });
+  const normalized = config.normalize(request.body);
+  if (normalized.error) return response.status(400).json({ error: normalized.error });
+  const placeholders = config.dbColumns.map((_, index) => `$${index + 1}`).join(', ');
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO ${config.table} (${config.dbColumns.join(', ')}) VALUES (${placeholders}) RETURNING ${config.select}`,
+      config.values(normalized.item),
+    );
+    return response.status(201).json({ item: config.mapRow(rows[0]) });
+  } catch {
+    console.error('OMAPI library create failed');
+    return response.status(503).json({ error: 'Library service unavailable' });
+  }
+});
+
+app.patch('/api/admin/library/:collection/:id', requireAuth, requireContentManager, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const config = libraryTable(request.params.collection);
+  if (!config) return response.status(404).json({ error: 'Library collection not found' });
+  const id = validateEditorialId(request.params.id);
+  if (!id) return response.status(400).json({ error: 'Document id is invalid' });
+  const normalized = config.normalize(request.body);
+  if (normalized.error) return response.status(400).json({ error: normalized.error });
+  const assignments = config.dbColumns.map((column, index) => `${column} = $${index + 1}`).join(', ');
+  try {
+    const { rows } = await pool.query(
+      `UPDATE ${config.table} SET ${assignments}, updated_at = NOW() WHERE id = $${config.dbColumns.length + 1} RETURNING ${config.select}`,
+      [...config.values(normalized.item), id],
+    );
+    if (!rows.length) return response.status(404).json({ error: 'Document not found' });
+    return response.json({ item: config.mapRow(rows[0]) });
+  } catch {
+    console.error('OMAPI library update failed');
+    return response.status(503).json({ error: 'Library service unavailable' });
+  }
+});
+
+app.delete('/api/admin/library/:collection/:id', requireAuth, requireContentManager, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const config = libraryTable(request.params.collection);
+  if (!config) return response.status(404).json({ error: 'Library collection not found' });
+  const id = validateEditorialId(request.params.id);
+  if (!id) return response.status(400).json({ error: 'Document id is invalid' });
+  try {
+    const result = await pool.query(`DELETE FROM ${config.table} WHERE id = $1`, [id]);
+    if (!result.rowCount) return response.status(404).json({ error: 'Document not found' });
+    return response.json({ ok: true, id });
+  } catch {
+    console.error('OMAPI library delete failed');
+    return response.status(503).json({ error: 'Library service unavailable' });
+  }
+});
+
+app.put('/api/admin/settings/:key', requireAuth, requireContentManager, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const key = request.params.key;
+  if (!SITE_SETTING_KEYS.includes(key)) return response.status(404).json({ error: 'Setting not found' });
+  const normalized = normalizeSiteSetting(key, request.body?.value);
+  if (normalized.error) return response.status(400).json({ error: normalized.error });
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO site_settings (setting_key, value, updated_at)
+       VALUES ($1, $2::jsonb, NOW())
+       ON CONFLICT (setting_key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+       RETURNING setting_key, value`,
+      [key, JSON.stringify(normalized.value)],
+    );
+    return response.json({ key: rows[0].setting_key, value: rows[0].value });
+  } catch {
+    console.error('OMAPI site settings save failed');
+    return response.status(503).json({ error: 'Settings service unavailable' });
   }
 });
 

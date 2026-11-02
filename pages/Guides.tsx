@@ -1,13 +1,11 @@
 import React from 'react';
 import { Banknote, BookOpen, Download, FileText, Globe2, Lightbulb, Palette, Tag, Check, Info } from 'lucide-react';
 import Breadcrumb from '../components/Breadcrumb';
-import { DEFAULT_GUIDES } from '../constants';
-import { Guide } from '../types';
-import { useCrud } from '../hooks/useCrud';
+import { useApiLibrary } from '../hooks/useApiLibrary';
 import { getLibraryPlainText, isAllowedLibraryUrl } from '../utils/documentLibraryLogic';
 
 const Guides: React.FC = () => {
-  const { items: guides } = useCrud<Guide>('omapi_guides', DEFAULT_GUIDES);
+  const { guides, loading, error } = useApiLibrary(undefined, 'guides');
 
   const getIcon = (name: string) => {
     switch (name) {
@@ -43,7 +41,9 @@ const Guides: React.FC = () => {
           <div className="w-24 h-1.5 bg-primary rounded-full mt-4" />
         </div>
 
-        {guides.length === 0 && <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-gray-600">Aucun guide n’est actuellement publié.</div>}
+        {error && <div role="alert" className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Les guides sont temporairement indisponibles. Réessayez dans quelques instants.</div>}
+        {loading && guides.length === 0 && <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 text-center text-gray-500">Chargement des guides…</div>}
+        {!loading && !error && guides.length === 0 && <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-gray-600">Aucun guide n’est actuellement publié.</div>}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {guides.map((guide) => {
             const Icon = getIcon(guide.iconName);

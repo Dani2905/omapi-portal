@@ -2,9 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Download, FileText, Folder, Info, Lightbulb, Palette, Tag } from 'lucide-react';
 import Breadcrumb from '../components/Breadcrumb';
-import { DEFAULT_FORMS } from '../constants';
-import { Formulaire } from '../types';
-import { useCrud } from '../hooks/useCrud';
+import { useApiLibrary } from '../hooks/useApiLibrary';
 import { FORM_CATEGORIES, getLibraryPlainText, isAllowedLibraryUrl } from '../utils/documentLibraryLogic';
 
 const UNCATEGORIZED = '__forms_no_category__';
@@ -16,7 +14,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const Formulaires: React.FC = () => {
-  const { items: forms } = useCrud<Formulaire>('omapi_forms', DEFAULT_FORMS);
+  const { forms, loading, error } = useApiLibrary(undefined, 'forms');
   const knownCategories = FORM_CATEGORIES.map((category) => ({
     id: category,
     title: CATEGORY_LABELS[category] || category,
@@ -50,7 +48,9 @@ const Formulaires: React.FC = () => {
           <div className="w-24 h-1.5 bg-primary rounded-full mt-4" />
         </div>
 
-        {forms.length === 0 && <div className="mb-8 rounded-xl border border-gray-200 bg-white p-8 text-center text-gray-600">Aucun formulaire n’est actuellement publié.</div>}
+        {error && <div role="alert" className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Les formulaires sont temporairement indisponibles. Réessayez dans quelques instants.</div>}
+        {loading && forms.length === 0 && <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 text-center text-gray-500">Chargement des formulaires…</div>}
+        {!loading && !error && forms.length === 0 && <div className="mb-8 rounded-xl border border-gray-200 bg-white p-8 text-center text-gray-600">Aucun formulaire n’est actuellement publié.</div>}
 
         {categories.map(({ id, title, icon }) => {
           const items = categoryForms(id);
