@@ -25,7 +25,7 @@ const NewsFormModal: React.FC<NewsFormModalProps> = ({ isOpen, onClose, onSave, 
 
   useEffect(() => {
     if (isOpen) {
-      setFormData(initialData);
+      setFormData({ ...initialData });
       // Keep the original database id separate from editable form state so an edit
       // can never silently fall back to POST/create and produce a duplicate.
       setEditingId(initialData.id ?? null);
@@ -202,7 +202,7 @@ const NewsFormModal: React.FC<NewsFormModalProps> = ({ isOpen, onClose, onSave, 
                                                     maxLength={MAX_NEWS_TITLE_LENGTH}
                                                     className="w-full pl-9 px-3 py-2 border border-slate-300 focus:border-slate-900 outline-none text-xs text-slate-900 bg-white placeholder-slate-400 font-bold uppercase tracking-tight"
                                                     value={formData.title || ''}
-                                                    onChange={e => setFormData({...formData, title: e.target.value})}
+                                                    onChange={e => setFormData((current) => ({ ...current, title: e.target.value }))}
                                                     placeholder="TITRE DE L'ARTICLE"
                                                 />
                                             </div>
@@ -218,7 +218,7 @@ const NewsFormModal: React.FC<NewsFormModalProps> = ({ isOpen, onClose, onSave, 
                                                   <ReactQuill 
                                                       theme="snow"
                                                       value={formData.content || ''}
-                                                      onChange={(content: string) => setFormData({...formData, content})}
+                                                      onChange={(content: string) => setFormData((current) => ({ ...current, content }))}
                                                       modules={quillModules}
                                                       placeholder="Rédigez votre article ici..."
                                                   />
@@ -270,7 +270,7 @@ const NewsFormModal: React.FC<NewsFormModalProps> = ({ isOpen, onClose, onSave, 
                                                         required
                                                         className="w-full pl-9 px-3 py-2 border border-slate-300 text-[10px] font-bold uppercase tracking-tight text-slate-700 bg-white outline-none focus:border-slate-900 cursor-pointer appearance-none"
                                                         value={formData.category || ''}
-                                                        onChange={e => setFormData({...formData, category: e.target.value})}
+                                                        onChange={e => setFormData((current) => ({ ...current, category: e.target.value }))}
                                                     >
                                                         <option value="">SÉLECTIONNER...</option>
                                                         {NEWS_CATEGORIES.map((category) => (
@@ -293,7 +293,7 @@ const NewsFormModal: React.FC<NewsFormModalProps> = ({ isOpen, onClose, onSave, 
                                                         required
                                                         className="w-full pl-9 px-3 py-2 border border-slate-300 text-[10px] font-mono text-slate-700 bg-white outline-none focus:border-slate-900 placeholder-slate-400"
                                                         value={formData.date || ''}
-                                                        onChange={e => setFormData({...formData, date: e.target.value})}
+                                                        onChange={e => setFormData((current) => ({ ...current, date: e.target.value }))}
                                                         placeholder="EX: 15 OCT 2023"
                                                     />
                                                 </div>
@@ -307,7 +307,7 @@ const NewsFormModal: React.FC<NewsFormModalProps> = ({ isOpen, onClose, onSave, 
                                                     rows={3}
                                                     className="w-full px-3 py-2 border border-slate-300 text-[10px] font-medium text-slate-700 bg-white outline-none focus:border-slate-900 resize-none placeholder-slate-400"
                                                     value={formData.description || ''}
-                                                    onChange={e => setFormData({...formData, description: e.target.value})}
+                                                    onChange={e => setFormData((current) => ({ ...current, description: e.target.value }))}
                                                     placeholder="RÉSUMÉ POUR LA CARTE..."
                                                 />
                                             </div>
@@ -318,7 +318,7 @@ const NewsFormModal: React.FC<NewsFormModalProps> = ({ isOpen, onClose, onSave, 
                                                         type="checkbox"
                                                         className="form-checkbox h-3 w-3 text-slate-900 border-slate-300 focus:ring-0"
                                                         checked={formData.featured || false}
-                                                        onChange={e => setFormData({...formData, featured: e.target.checked})}
+                                                        onChange={e => setFormData((current) => ({ ...current, featured: e.target.checked }))}
                                                     />
                                                     <div className="flex items-center text-[10px] font-bold uppercase tracking-widest text-slate-500 group-hover:text-slate-900">
                                                         <StarIcon className={`w-3 h-3 mr-2 ${formData.featured ? 'text-yellow-500 fill-yellow-500' : 'text-slate-400'}`} />
