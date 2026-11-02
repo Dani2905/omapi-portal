@@ -2,13 +2,11 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
-import { LATEST_NEWS } from '../data/mocks/news';
-import { NewsItem } from '../types';
-import { useCrud } from '../hooks/useCrud';
+import { useApiEditorial } from '../hooks/useApiEditorial';
 import { sortNewsItems } from '../utils/editorialLogic';
 
 const News: React.FC = () => {
-  const { items: newsList } = useCrud<NewsItem>('omapi_news', LATEST_NEWS);
+  const { newsItems: newsList } = useApiEditorial(undefined, 'news');
   const orderedNewsList = sortNewsItems(newsList);
 
   return (

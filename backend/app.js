@@ -27,7 +27,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
   maxAge: 600,
 }));
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '8mb' }));
 
 const databaseConfig = {
   host: process.env.PGHOST,
@@ -48,6 +48,100 @@ const LOGIN_MAX_FAILURES = 8;
 const loginFailures = new Map();
 
 const publicUserFields = `id, name, email, role, status, created_at, updated_at`;
+
+
+const editorialCategories = ['Annonce', 'Actualité', 'Blog', 'Déclaration', 'Événement', 'International', 'Juridique', 'Formation', 'Innovation'];
+const editorialConfig = {
+  news: {
+    table: 'news',
+    select: 'id, title, display_date, category, image_url, description, content, featured',
+    dbColumns: ['title', 'display_date', 'category', 'image_url', 'description', 'content', 'featured'],
+    normalize(body) {
+      const item = {
+        title: typeof body?.title === 'string' ? body.title.trim() : '',
+        date: typeof (body?.date ?? body?.display_date) === 'string' ? String(body.date ?? body.display_date).trim() : '',
+        category: typeof body?.category === 'string' ? body.category.trim() : '',
+        image: typeof (body?.image ?? body?.image_url) === 'string' ? String(body.image ?? body.image_url).trim() : '',
+        description: typeof body?.description === 'string' ? body.description.trim() : '',
+        content: typeof body?.content === 'string' ? body.content : '',
+        featured: body?.featured === true,
+      };
+      if (item.title.length < 3 || item.title.length > 180 || !item.date || item.date.length > 100 || !editorialCategories.includes(item.category) || !item.description || item.description.length > 500 || item.content.length > 1000000 || !isSafeImageValue(item.image)) {
+        return { error: 'News item is invalid' };
+      }
+      return { item };
+    },
+    values: (item) => [item.title, item.date, item.category, item.image, item.description, item.content, item.featured],
+    mapRow: (row) => ({ id: Number(row.id), title: row.title, date: row.display_date, category: row.category, image: row.image_url, description: row.description, content: row.content || '', featured: row.featured }),
+  },
+  slides: {
+    table: 'home_slides',
+    select: 'id, image_url, title, subtitle, cta_text, cta_link, news_id',
+    dbColumns: ['image_url', 'title', 'subtitle', 'cta_text', 'cta_link', 'news_id'],
+    normalize(body) {
+      const item = {
+        image: typeof (body?.image ?? body?.image_url) === 'string' ? String(body.image ?? body.image_url).trim() : '',
+        title: typeof body?.title === 'string' ? body.title.trim() : '',
+        subtitle: typeof body?.subtitle === 'string' ? body.subtitle.trim() : '',
+        ctaText: typeof (body?.ctaText ?? body?.cta_text) === 'string' ? String(body.ctaText ?? body.cta_text).trim() : '',
+        ctaLink: typeof (body?.ctaLink ?? body?.cta_link) === 'string' ? String(body.ctaLink ?? body.cta_link).trim() : '',
+        newsId: body?.newsId == null && body?.news_id == null ? null : Number(body.newsId ?? body.news_id),
+      };
+      if (item.title.length > 200 || item.subtitle.length > 1000 || item.ctaText.length > 100 || item.ctaLink.length > 2048 || !isSafeImageValue(item.image) || !isSafeLinkValue(item.ctaLink) || (item.newsId !== null && (!Number.isSafeInteger(item.newsId) || item.newsId < 1))) {
+        return { error: 'Slide is invalid' };
+      }
+      return { item };
+    },
+    values: (item) => [item.image, item.title, item.subtitle, item.ctaText, item.ctaLink, item.newsId],
+    mapRow: (row) => ({ id: Number(row.id), image: row.image_url, title: row.title, subtitle: row.subtitle, ctaText: row.cta_text, ctaLink: row.cta_link, ...(row.news_id == null ? {} : { newsId: Number(row.news_id) }) }),
+  },
+  announcements: {
+    table: 'announcements',
+    select: 'id, text, is_active',
+    dbColumns: ['text', 'is_active'],
+    normalize(body) {
+      const item = { text: typeof body?.text === 'string' ? body.text.replace(/\s+/g, ' ').trim() : '', isActive: body?.isActive === true || body?.is_active === true };
+      if (!item.text || item.text.length > 240 || typeof body?.isActive !== 'boolean' && typeof body?.is_active !== 'boolean') return { error: 'Announcement is invalid' };
+      return { item };
+    },
+    values: (item) => [item.text, item.isActive],
+    mapRow: (row) => ({ id: Number(row.id), text: row.text, isActive: row.is_active }),
+  },
+};
+
+function isSafeImageValue(value) {
+  if (!value) return true;
+  if (value.length > 2_100_000 || /[\u0000-\u0020]/.test(value)) return false;
+  if (/^data:image\/(?:jpeg|png|webp);base64,[a-z0-9+/=]+$/i.test(value)) return true;
+  if (value.startsWith('/') && !value.startsWith('//') && !value.includes('\\') && !value.split('/').includes('..')) return true;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'https:' && Boolean(parsed.hostname) && !parsed.username && !parsed.password;
+  } catch {
+    return false;
+  }
+}
+
+function isSafeLinkValue(value) {
+  if (!value) return true;
+  if (value.startsWith('/') && !value.startsWith('//') && !value.includes('\\') && !value.split('/').includes('..')) return true;
+  if (value.startsWith('#')) return true;
+  try {
+    const parsed = new URL(value);
+    return (parsed.protocol === 'https:' || parsed.protocol === 'mailto:') && !parsed.username && !parsed.password;
+  } catch {
+    return false;
+  }
+}
+
+function editorialTable(collection) {
+  return editorialConfig[collection] || null;
+}
+
+function validateEditorialId(value) {
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
 
 function normalizeEmail(value) {
   return typeof value === 'string' ? value.trim().toLowerCase() : '';
@@ -108,6 +202,13 @@ function requireAuth(request, response, next) {
 function requireAdmin(request, response, next) {
   if (request.auth?.user?.role !== 'Admin') {
     return response.status(403).json({ error: 'Administrator role required' });
+  }
+  return next();
+}
+
+function requireContentManager(request, response, next) {
+  if (!['Admin', 'Éditeur'].includes(request.auth?.user?.role)) {
+    return response.status(403).json({ error: 'Content manager role required' });
   }
   return next();
 }
@@ -485,6 +586,92 @@ app.delete('/api/admin/users/:id', requireAuth, requireAdmin, async (request, re
     return response.status(503).json({ error: 'User service unavailable' });
   } finally {
     client.release();
+  }
+});
+
+
+app.get('/api/content/:collection', async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const config = editorialTable(request.params.collection);
+  if (!config) return response.status(404).json({ error: 'Content collection not found' });
+  try {
+    const { rows } = await pool.query(`SELECT ${config.select} FROM ${config.table} ORDER BY id ASC`);
+    return response.json({ items: rows.map(config.mapRow) });
+  } catch {
+    console.error('OMAPI public content read failed');
+    return response.status(503).json({ error: 'Content service unavailable' });
+  }
+});
+
+app.get('/api/admin/editorial/:collection', requireAuth, requireContentManager, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const config = editorialTable(request.params.collection);
+  if (!config) return response.status(404).json({ error: 'Content collection not found' });
+  try {
+    const { rows } = await pool.query(`SELECT ${config.select} FROM ${config.table} ORDER BY id ASC`);
+    return response.json({ items: rows.map(config.mapRow) });
+  } catch {
+    console.error('OMAPI admin editorial read failed');
+    return response.status(503).json({ error: 'Content service unavailable' });
+  }
+});
+
+app.post('/api/admin/editorial/:collection', requireAuth, requireContentManager, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const config = editorialTable(request.params.collection);
+  if (!config) return response.status(404).json({ error: 'Content collection not found' });
+  const normalized = config.normalize(request.body);
+  if (normalized.error) return response.status(400).json({ error: normalized.error });
+  const placeholders = config.dbColumns.map((_, index) => `$${index + 1}`).join(', ');
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO ${config.table} (${config.dbColumns.join(', ')}) VALUES (${placeholders}) RETURNING ${config.select}`,
+      config.values(normalized.item),
+    );
+    return response.status(201).json({ item: config.mapRow(rows[0]) });
+  } catch (error) {
+    if (error?.code === '23503') return response.status(400).json({ error: 'Linked content item does not exist' });
+    console.error('OMAPI editorial create failed');
+    return response.status(503).json({ error: 'Content service unavailable' });
+  }
+});
+
+app.patch('/api/admin/editorial/:collection/:id', requireAuth, requireContentManager, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const config = editorialTable(request.params.collection);
+  if (!config) return response.status(404).json({ error: 'Content collection not found' });
+  const id = validateEditorialId(request.params.id);
+  if (!id) return response.status(400).json({ error: 'Content id is invalid' });
+  const normalized = config.normalize(request.body);
+  if (normalized.error) return response.status(400).json({ error: normalized.error });
+  const assignments = config.dbColumns.map((column, index) => `${column} = $${index + 1}`).join(', ');
+  try {
+    const { rows } = await pool.query(
+      `UPDATE ${config.table} SET ${assignments}, updated_at = NOW() WHERE id = $${config.dbColumns.length + 1} RETURNING ${config.select}`,
+      [...config.values(normalized.item), id],
+    );
+    if (!rows.length) return response.status(404).json({ error: 'Content item not found' });
+    return response.json({ item: config.mapRow(rows[0]) });
+  } catch (error) {
+    if (error?.code === '23503') return response.status(400).json({ error: 'Linked content item does not exist' });
+    console.error('OMAPI editorial update failed');
+    return response.status(503).json({ error: 'Content service unavailable' });
+  }
+});
+
+app.delete('/api/admin/editorial/:collection/:id', requireAuth, requireContentManager, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const config = editorialTable(request.params.collection);
+  if (!config) return response.status(404).json({ error: 'Content collection not found' });
+  const id = validateEditorialId(request.params.id);
+  if (!id) return response.status(400).json({ error: 'Content id is invalid' });
+  try {
+    const result = await pool.query(`DELETE FROM ${config.table} WHERE id = $1`, [id]);
+    if (!result.rowCount) return response.status(404).json({ error: 'Content item not found' });
+    return response.json({ ok: true, id });
+  } catch {
+    console.error('OMAPI editorial delete failed');
+    return response.status(503).json({ error: 'Content service unavailable' });
   }
 });
 

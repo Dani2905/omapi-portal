@@ -1,12 +1,12 @@
 import React, { useMemo } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { useCrud } from '../hooks/useCrud';
+import { useApiEditorial } from '../hooks/useApiEditorial';
 import { getLibraryPlainText } from '../utils/documentLibraryLogic';
 import { getNewsPlainText } from '../utils/editorialLogic';
 import { normalizeEventRecord } from '../utils/eventLogic';
-import { NewsItem, LegislationItem, Formulaire, Guide, Formation, Event, GopiItem } from '../types';
+import { LegislationItem, Formulaire, Guide, Formation, Event, GopiItem } from '../types';
 import Breadcrumb from '../components/Breadcrumb';
-import { LATEST_NEWS } from '../data/mocks/news';
 import { 
   DEFAULT_LEGISLATION, 
   DEFAULT_FORMS, 
@@ -22,7 +22,7 @@ const SearchResults: React.FC = () => {
   const query = queryParams.get('q') || '';
   const lowerQuery = query.toLowerCase();
 
-  const { items: news } = useCrud<NewsItem>('omapi_news', LATEST_NEWS);
+  const { newsItems: news } = useApiEditorial(undefined, 'news');
   const { items: legislation } = useCrud<LegislationItem>('omapi_legislation', DEFAULT_LEGISLATION);
   const { items: forms } = useCrud<Formulaire>('omapi_forms', DEFAULT_FORMS);
   const { items: guides } = useCrud<Guide>('omapi_guides', DEFAULT_GUIDES);

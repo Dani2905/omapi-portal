@@ -1,0 +1,8 @@
+Mise à jour Actualités + Carrousel + Bandeau
+
+1. Déployer d’abord backend/app.js dans l’application Node OMAPI, puis redémarrer l’application.
+2. Copier les fichiers frontend de l’archive dans le clone du portail, en conservant leurs chemins, puis pousser avec GitHub Desktop pour lancer le déploiement Netlify.
+3. Après déploiement, recharger le portail sur chaque navigateur utilisé. Les clés localStorage omapi_news, omapi_slides et omapi_announcements ne seront supprimées qu’après une réponse réussie de l’API. En cas d’échec API, elles restent intactes.
+4. Les créations, modifications et suppressions de ces trois modules passent ensuite par l’API/PostgreSQL. Les autres modules, notamment Candidatures web, restent inchangés.
+
+Aucune donnée n’a été migrée ni supprimée dans la base PostgreSQL. Les éventuelles lignes déjà présentes en base ne sont pas effacées par cette mise à jour. Aucune mise en production n’a été effectuée depuis cet espace de travail.

@@ -1,13 +1,11 @@
 import React from 'react';
-import { Announcement } from '../../types';
 import { MegaphoneIcon } from '../admin/AdminIcons';
-import { useCrud } from '../../hooks/useCrud';
-import { DEFAULT_ANNOUNCEMENTS } from '../../constants';
+import { useApiEditorial } from '../../hooks/useApiEditorial';
 import { getActiveAnnouncements } from '../../utils/announcementLogic';
 import { useAnnouncementRotation } from '../../hooks/useAnnouncementRotation';
 
 const AnnouncementBar: React.FC = () => {
-  const { items } = useCrud<Announcement>('omapi_announcements', DEFAULT_ANNOUNCEMENTS);
+  const { announcements: items } = useApiEditorial(undefined, 'announcements');
   const activeAnnouncements = getActiveAnnouncements(items);
   const rotation = useAnnouncementRotation(activeAnnouncements.length);
 

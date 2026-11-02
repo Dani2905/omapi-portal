@@ -1,8 +1,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCrud, useObjectStorage } from './useCrud';
-import { SLIDES, DEFAULT_ANNOUNCEMENTS, DEFAULT_FORMS, DEFAULT_GUIDES, DEFAULT_FORMATIONS, DEFAULT_FORMATION_REGISTRATIONS, DEFAULT_GOPI, DEFAULT_GOPI_ORDERS, DEFAULT_EVENTS, DEFAULT_EVENT_REGISTRATIONS, DEFAULT_LEGISLATION, DEFAULT_JOBS } from '../constants';
-import { LATEST_NEWS } from '../data/mocks/news';
+import { DEFAULT_FORMS, DEFAULT_GUIDES, DEFAULT_FORMATIONS, DEFAULT_FORMATION_REGISTRATIONS, DEFAULT_GOPI, DEFAULT_GOPI_ORDERS, DEFAULT_EVENTS, DEFAULT_EVENT_REGISTRATIONS, DEFAULT_LEGISLATION, DEFAULT_JOBS } from '../constants';
+import { useApiEditorial } from './useApiEditorial';
 import { describeCrudAction } from '../utils/notificationMessages';
 import { canTransitionGopiOrder, GOPI_PAYMENT_METHODS } from '../utils/gopiLogic';
 import { normalizeAnnouncementDraft, validateAnnouncementText } from '../utils/announcementLogic';
@@ -66,36 +66,13 @@ export const useAdminData = () => {
     notificationTimers.current.clear();
   }, []);
 
-  // --- CRUD Hooks with Notification Callback ---
-  
-  // 1. Hero Slides
-  const {
-    items: slides,
-    setItems: setSlides,
-    saveItem: saveSlide,
-    deleteItem: deleteSlide
-  } = useCrud<Slide>('omapi_slides', SLIDES, addNotification);
-
-  // Nettoyer les anciennes copies de slides liées aux actualités : elles sont
-  // désormais générées directement depuis les articles à la une.
-  useEffect(() => {
-    if (!slides.some((slide) => slide.newsId !== undefined)) return;
-    setSlides((currentSlides) => currentSlides.filter((slide) => slide.newsId === undefined));
-  }, [slides, setSlides]);
-
-  // 2. News
-  const {
-    items: newsItems,
-    saveItem: saveNewsBase,
-    deleteItemWithCallback: deleteNews
-  } = useCrud<NewsItem>('omapi_news', LATEST_NEWS, addNotification);
-
-  // 3. Announcements (now CRUD)
-  const {
-    items: announcements,
-    saveItem: saveAnnouncementBase,
-    deleteItem: deleteAnnouncement,
-  } = useCrud<Announcement>('omapi_announcements', DEFAULT_ANNOUNCEMENTS, addNotification);
+  // --- Editorial content is API-backed; the retired local copies are cleared
+  // only after the API has returned successfully. Other modules remain local. ---
+  const editorial = useApiEditorial(addNotification);
+  const { slides, newsItems, announcements } = editorial;
+  const saveSlide = async (draft: Partial<Slide>): Promise<boolean> => Boolean(await editorial.saveSlide(draft));
+  const deleteSlide = editorial.deleteSlide;
+  const deleteAnnouncement = editorial.deleteAnnouncement;
 
   const saveAnnouncement = async (draft: Partial<Announcement>): Promise<boolean> => {
     const normalized = normalizeAnnouncementDraft(draft);
@@ -108,7 +85,7 @@ export const useAdminData = () => {
       addNotification('Choisissez si le message doit être actif ou inactif.', 'error');
       return false;
     }
-    return saveAnnouncementBase(normalized);
+    return Boolean(await editorial.saveAnnouncement(normalized));
   };
 
   // 4. Forms & Guides
@@ -351,25 +328,16 @@ export const useAdminData = () => {
 
     const normalized = normalizeNewsDraft(newsData);
     const isNew = newsData.id === undefined || newsData.id === null;
-    const savedId = newsData.id ?? Date.now();
-    const dataToSave: Partial<NewsItem> = { ...normalized, id: savedId };
-    const saved = await saveNewsBase(dataToSave, 'id', { notify: false });
+    const dataToSave: Partial<NewsItem> = { ...normalized, ...(newsData.id == null ? {} : { id: newsData.id }) };
+    const savedItem = await editorial.saveNews(dataToSave);
+    if (!savedItem) return false;
 
-    if (!saved) {
-      addNotification('Échec de la sauvegarde : l’actualité n’a pas été enregistrée. Vos changements restent dans le formulaire ; libérez de l’espace dans le navigateur puis réessayez.', 'error');
-      return false;
-    }
-
-    const description = describeCrudAction('omapi_news', isNew ? 'created' : 'updated', dataToSave);
+    const description = describeCrudAction('omapi_news', isNew ? 'created' : 'updated', savedItem);
     addNotification(description.message, 'success');
     return true;
   };
 
-  const handleDeleteNews = (id: number) => {
-    return deleteNews(id, (deletedId) => (
-      setSlides((previousSlides) => previousSlides.filter((slide) => String(slide.newsId) !== String(deletedId)))
-    ));
-  };
+  const handleDeleteNews = (id: number) => editorial.deleteNews(id);
 
   // 13. System Activity Logs
   const { items: activityLogs } = useCrud<ActivityLog>('omapi_activities', [], () => {});

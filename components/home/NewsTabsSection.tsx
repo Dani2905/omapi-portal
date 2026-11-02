@@ -3,14 +3,13 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRightIcon, NewspaperIcon, ChatBubbleLeftRightIcon, DocumentTextIcon } from '../admin/AdminIcons';
-import { useCrud } from '../../hooks/useCrud';
-import { NewsItem } from '../../types';
-import { LATEST_NEWS } from '../../data/mocks/news';
+import { useApiEditorial } from '../../hooks/useApiEditorial';
+import type { NewsItem } from '../../types';
 import { getHomepageNewsSection, sortNewsItems } from '../../utils/editorialLogic';
 
 const NewsTabsSection: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'news' | 'blog' | 'remarks'>('news');
-  const { items: newsItems } = useCrud<NewsItem>('omapi_news', LATEST_NEWS);
+  const { newsItems } = useApiEditorial(undefined, 'news');
 
   // Tous les contenus restent visibles : seuls Blog et Déclaration ont
   // des onglets dédiés, les autres catégories appartiennent aux actualités.

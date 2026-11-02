@@ -2,9 +2,7 @@
 import React, { useEffect } from 'react';
 import { useParams, Link, Navigate } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
-import { LATEST_NEWS } from '../data/mocks/news';
-import { NewsItem } from '../types';
-import { useCrud } from '../hooks/useCrud';
+import { useApiEditorial } from '../hooks/useApiEditorial';
 import { sanitizeNewsHtml, sortNewsItems } from '../utils/editorialLogic';
 
 // --- Heroicons ---
@@ -30,7 +28,7 @@ const ShareIcon = ({ className }: { className?: string }) => (
 const NewsDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   useEffect(() => { window.scrollTo(0, 0); }, [id]);
-  const { items: allNews, loading: crudLoading } = useCrud<NewsItem>('omapi_news', LATEST_NEWS);
+  const { newsItems: allNews, loading } = useApiEditorial(undefined, 'news');
   const numericId = Number(id);
   const newsItem = Number.isSafeInteger(numericId)
     ? allNews.find((item) => String(item.id) === String(numericId))
@@ -39,7 +37,7 @@ const NewsDetail: React.FC = () => {
     ? sortNewsItems(allNews).filter((item) => String(item.id) !== String(newsItem.id)).slice(0, 3)
     : [];
 
-  if (crudLoading) {
+  if (loading) {
     return <div className="min-h-screen bg-gray-50 flex items-center justify-center">Chargement...</div>;
   }
 

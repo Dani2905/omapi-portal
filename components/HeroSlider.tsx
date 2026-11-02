@@ -2,16 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { NewsItem, Slide } from '../types';
-import { LATEST_NEWS } from '../data/mocks/news';
-import { SLIDES } from '../constants';
-import { useCrud } from '../hooks/useCrud';
+import { useApiEditorial } from '../hooks/useApiEditorial';
 import { buildEditorialSlides } from '../utils/editorialLogic';
 
 const HeroSlider: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
-  const { items: newsItems } = useCrud<NewsItem>('omapi_news', LATEST_NEWS);
-  const { items: managedSlides } = useCrud<Slide>('omapi_slides', SLIDES);
+  const { newsItems, slides: managedSlides } = useApiEditorial(undefined, 'hero');
   
   // Les actualités à la une sont générées une seule fois depuis leur fiche.
   const slides = buildEditorialSlides(managedSlides, newsItems);
