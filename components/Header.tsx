@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { NAV_ITEMS } from '../constants';
@@ -7,12 +7,20 @@ import { MagnifyingGlassIcon } from './admin/AdminIcons';
 import { Menu, X, ChevronDown } from 'lucide-react';
 import { getApiToken } from '../utils/apiAuth';
 
+const QUICK_LINKS = [
+  { label: 'Démarches brevets', path: '/service/brevet' },
+  { label: 'Démarches marques', path: '/service/marque' },
+  { label: 'Formulaires à télécharger', path: '/formulaires' },
+  { label: 'Consulter la GOPI', path: '/gopi' },
+];
+
 const Header: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isFindFastOpen, setIsFindFastOpen] = useState(false);
+  const findFastRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -26,7 +34,30 @@ const Header: React.FC = () => {
     return () => window.removeEventListener('storage', checkAuth);
   }, [location.pathname]);
 
-  const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
+  useEffect(() => {
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (event.target instanceof Node && !findFastRef.current?.contains(event.target)) {
+        setIsFindFastOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsFindFastOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, []);
+
+  useEffect(() => {
+    setIsFindFastOpen(false);
+    setActiveDropdown(null);
+    setIsMobileMenuOpen(false);
+  }, [location.pathname]);
+
+  const toggleMobileMenu = () => setIsMobileMenuOpen((open) => !open);
   
   const handleDropdownEnter = (label: string) => {
     if (window.innerWidth >= 1024) {
@@ -59,11 +90,10 @@ const Header: React.FC = () => {
       <div className="bg-[#111827] text-stone-200 py-1.5 border-b border-stone-800 relative z-50 text-xs">
         <div className="container mx-auto max-w-7xl px-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600" className="h-3.5 w-5 rounded-xs shrink-0">
-               <rect width="900" height="600" fill="#fff"/>
-               <rect width="900" height="200" fill="#fc3d32"/>
-               <rect y="200" width="900" height="200" fill="#fff"/>
-               <rect y="400" width="900" height="200" fill="#007e3a"/>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600" role="img" aria-label="Drapeau de Madagascar" className="h-3.5 w-5 rounded-xs shrink-0">
+               <rect width="300" height="600" fill="#fff"/>
+               <rect x="300" width="600" height="300" fill="#fc3d32"/>
+               <rect x="300" y="300" width="600" height="300" fill="#007e3a"/>
             </svg>
             <span className="font-medium text-stone-300">Site officiel de la République de Madagascar</span>
             <span className="text-stone-500 hidden sm:inline">·</span>
@@ -131,21 +161,25 @@ const Header: React.FC = () => {
                     </button>
                 </form>
                 
-                <div className="relative hidden md:block">
-                  <button 
-                    onClick={() => setIsFindFastOpen(!isFindFastOpen)}
+                <div ref={findFastRef} className="relative hidden md:block">
+                  <button
+                    type="button"
+                    aria-haspopup="menu"
+                    aria-expanded={isFindFastOpen}
+                    aria-controls="find-fast-menu"
+                    onClick={() => setIsFindFastOpen((open) => !open)}
                     className="bg-[#002B49] text-white px-5 py-2.5 font-bold text-sm whitespace-nowrap hover:bg-[#004f87] transition-colors rounded-sm flex items-center gap-2"
                   >
-                      Trouver rapidement <ChevronDown className={`w-4 h-4 transition-transform ${isFindFastOpen ? 'rotate-180' : ''}`} />
+                    Trouver rapidement <ChevronDown aria-hidden="true" className={`w-4 h-4 transition-transform ${isFindFastOpen ? 'rotate-180' : ''}`} />
                   </button>
-                  {/* Find it Fast Dropdown */}
                   {isFindFastOpen && (
-                    <div className="absolute right-0 top-full mt-1 w-64 bg-white border border-gray-200 shadow-xl z-50 text-sm">
-                      <div className="bg-gray-100 px-4 py-2 font-bold text-gray-700 border-b border-gray-200">Raccourcis</div>
-                      <Link to="/search" className="block px-4 py-3 hover:bg-blue-50 hover:text-blue-900 border-b border-gray-100">Recherche de brevets</Link>
-                      <Link to="/search" className="block px-4 py-3 hover:bg-blue-50 hover:text-blue-900 border-b border-gray-100">Recherche de marques</Link>
-                      <Link to="/formulaires" className="block px-4 py-3 hover:bg-blue-50 hover:text-blue-900 border-b border-gray-100">Soumettre une demande</Link>
-                      <Link to="/gopi" className="block px-4 py-3 hover:bg-blue-50 hover:text-blue-900">Consulter la GOPI</Link>
+                    <div id="find-fast-menu" role="menu" className="absolute right-0 top-full mt-1 w-64 bg-white border border-gray-200 shadow-xl z-50 text-sm">
+                      <div className="bg-gray-100 px-4 py-2 font-bold text-gray-700 border-b border-gray-200">Accès directs</div>
+                      {QUICK_LINKS.map((item) => (
+                        <Link key={item.path} to={item.path} role="menuitem" onClick={() => setIsFindFastOpen(false)} className="block px-4 py-3 hover:bg-blue-50 hover:text-blue-900 border-b border-gray-100 last:border-0">
+                          {item.label}
+                        </Link>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -252,6 +286,14 @@ const Header: React.FC = () => {
             style={{ maxHeight: 'calc(100vh - 120px)'}}
           >
             <div className="flex flex-col">
+              <div className="bg-[#002B49] p-4 pb-2 text-sm font-bold uppercase tracking-wider text-white">Trouver rapidement</div>
+              <div className="grid grid-cols-2 gap-2 bg-blue-50 p-3">
+                {QUICK_LINKS.map((item) => (
+                  <Link key={item.path} to={item.path} onClick={() => setIsMobileMenuOpen(false)} className="rounded-lg border border-blue-100 bg-white px-3 py-3 text-sm font-semibold text-[#002B49] hover:border-blue-400 hover:bg-blue-50">
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
               <div className="bg-gray-100 p-4 pb-2 text-sm font-bold text-gray-500 uppercase tracking-wider">Navigation principale</div>
               {NAV_ITEMS.map((item) => (
                 <div key={item.label} className="border-b border-gray-100">

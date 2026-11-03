@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Upload, Check, Image as ImageIcon, PlayCircle, Save, Clock3 } from 'lucide-react';
+import { Upload, Check, PlayCircle, Save, Clock3 } from 'lucide-react';
 import { HomeResourcesConfig } from '../../types';
 import { DEFAULT_HOME_RESOURCES_CONFIG, isValidVideoDuration, normalizeHomeResourcesConfig, normalizeResourceUrl } from '../../data/homeResources';
 
@@ -146,13 +146,6 @@ const AdminResourcesManager: React.FC<AdminResourcesManagerProps> = ({ config, o
         </div>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:p-8" aria-labelledby="resources-preview-title">
-        <div className="mb-5 flex items-center gap-3"><ImageIcon className="h-5 w-5 text-slate-500" /><div><h3 id="resources-preview-title" className="font-extrabold text-slate-900">Aperçu de la section publique</h3><p className="text-xs text-slate-500">Rendu indicatif des titres, descriptions et vignettes.</p></div></div>
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-          <PreviewCard image={hourThumbnail} alt={localConfig.omapiHourTitle} eyebrow="Rencontres régulières" title={localConfig.omapiHourTitle} description={localConfig.omapiHourDesc} linkLabel="Consulter les prochaines sessions" />
-          <PreviewCard image={videoThumbnail} alt={localConfig.videoTitle} eyebrow={localConfig.videoUrl ? 'Vidéo / tutoriel' : 'Guide numérique'} title={localConfig.videoTitle} description={localConfig.videoDesc} duration={localConfig.videoDuration} linkLabel={localConfig.videoUrl ? 'Regarder le tutoriel' : 'Explorer les guides pratiques'} />
-        </div>
-      </section>
     </div>
   );
 };
@@ -169,10 +162,6 @@ function ImageFieldEditor({ label, src, alt, uploading, onUpload, onReset, aspec
     <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-700 hover:border-slate-500 hover:bg-white"><Upload className="h-4 w-4" />{uploading ? 'Traitement…' : 'Choisir une image'}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploading} onChange={onUpload} className="sr-only" /></label>
     <p className="mt-1 text-[10px] text-slate-500">JPG, PNG ou WebP · 8 Mo max · image optimisée automatiquement.</p>
   </div>;
-}
-
-function PreviewCard({ image, alt, eyebrow, title, description, duration, linkLabel }: { image: string; alt: string; eyebrow: string; title: string; description: string; duration?: string; linkLabel: string }) {
-  return <article className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50"><div className="relative aspect-video bg-slate-200"><img src={image} alt={alt} className="h-full w-full object-cover" />{duration && <span className="absolute bottom-2 right-2 rounded bg-black/75 px-2 py-1 text-[10px] font-mono text-white">{duration}</span>}</div><div className="p-4"><p className="text-[10px] font-bold uppercase tracking-widest text-blue-700">{eyebrow}</p><h4 className="mt-1 font-bold text-[#002B49]">{title}</h4><p className="mt-2 line-clamp-3 text-xs leading-relaxed text-slate-600">{description}</p><span className="mt-4 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-red-700">{linkLabel}<span aria-hidden="true">→</span></span></div></article>;
 }
 
 async function compressImage(file: File, maxWidth: number, maxHeight: number): Promise<string> {
