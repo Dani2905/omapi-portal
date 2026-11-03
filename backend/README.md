@@ -1,6 +1,8 @@
 # OMAPI API (cPanel)
 
-Application Express dédiée à OMAPI, séparée du site et des données du Cabinet. Le service comprend les contrôles de santé PostgreSQL, l'authentification Admin, la gestion des comptes autorisés et le stockage API des contenus OMAPI. Exécuter le script de création `schema/create_resources_library_settings.sql` sur la base `ciprabem_omapi_portal` avant de déployer cette version. Les anciennes copies localStorage ne sont jamais importées; après une réponse API réussie, le portail retire seulement les clés locales de formulaires, guides, législation et réglages, sans toucher aux autres données du navigateur.
+Application Express dédiée à OMAPI, séparée du site et des données du Cabinet. Le service comprend les contrôles de santé PostgreSQL, l'authentification Admin, la gestion des comptes autorisés et le stockage API des contenus OMAPI. Pour les formulaires, guides, législation et réglages, exécuter `schema/create_resources_library_settings.sql` sur `ciprabem_omapi_portal` avant de déployer cette partie. Les tables des formations, événements et inscriptions existent déjà; pour ces modules, le fichier `schema/grant_programme_permissions.sql` accorde uniquement les droits SQL requis au rôle de l'API — aucune table n'est recréée et aucune ancienne donnée locale n'est importée.
+
+Les copies localStorage des modules raccordés sont supprimées uniquement après une réponse API réussie pour leur collection. Seules les clés propres à ces modules sont concernées; aucune autre clé du navigateur n'est touchée.
 
 ## cPanel Setup Node.js App
 
@@ -25,7 +27,7 @@ Pour créer le premier administrateur, renseigner temporairement ces variables d
 - `OMAPI_BOOTSTRAP_ADMIN_EMAIL`
 - `OMAPI_BOOTSTRAP_ADMIN_PASSWORD` (12 caractères minimum, saisi uniquement dans cPanel)
 
-Au démarrage, l'application crée ce compte Admin uniquement si `app_users` est vide. Après la création, supprimer les trois variables `OMAPI_BOOTSTRAP_ADMIN_*` de cPanel et redémarrer l'application. Aucun compte n'est créé par défaut et aucune inscription publique n'est offerte.
+Au démarrage, l'application crée ce compte Admin uniquement si `app_users` est vide. Après la création, supprimer les trois variables `OMAPI_BOOTSTRAP_ADMIN_*` de cPanel et redémarrer l'application. Aucun compte n'est créé par défaut et aucune inscription publique de compte n'est offerte.
 
 Ne placez aucun mot de passe, jeton ou secret dans GitHub, Netlify ou les fichiers source.
 
@@ -41,12 +43,16 @@ Ne placez aucun mot de passe, jeton ou secret dans GitHub, Netlify ou les fichie
 - `POST /api/admin/users` — création d’un compte; le mot de passe est haché côté serveur.
 - `PATCH /api/admin/users/:id` — modification du compte, des droits et du mot de passe temporaire éventuel.
 - `DELETE /api/admin/users/:id` — suppression protégée contre l’auto-suppression, la suppression du compte principal et celle du dernier Admin actif.
-- `GET /api/content/forms|guides|legislation` — lecture publique des formulaires, guides et textes législatifs.
-- `POST|PATCH|DELETE /api/admin/library/:collection[/:id]` — gestion sécurisée des trois collections par Admin/Éditeur.
+- `GET /api/content/forms|guides|legislation|formations|events` — lecture publique des catalogues (pour les événements, seul un compte agrégé d'inscriptions est renvoyé, jamais les coordonnées des participants).
+- `POST|PATCH|DELETE /api/admin/library/:collection[/:id]` — gestion sécurisée des collections documentaires par Admin/Éditeur.
+- `GET /api/admin/programs/:collection` et `POST|PATCH|DELETE /api/admin/programs/:collection[/:id]` — gestion authentifiée des catalogues formations et événements.
+- `POST /api/public/registrations/formations|events` — soumission publique d'une inscription; validation, prévention des doublons et limitation de débit côté serveur.
+- `GET /api/admin/registrations/formations|events` — consultation authentifiée des inscriptions nominatives.
+- `DELETE /api/admin/registrations/formations|events/:id` — suppression authentifiée d’une inscription.
 - `GET /api/content/settings` — lecture publique des réglages autorisés.
 - `PUT /api/admin/settings/site_config|home_resources` — sauvegarde sécurisée des réglages du site et des ressources d’accueil.
-- Les anciennes routes éditoriales restent disponibles pour actualités, carrousel et annonces.
+- Les routes éditoriales restent disponibles pour actualités, carrousel et annonces.
 
-Les mots de passe sont hachés avec scrypt; seuls les condensats des jetons de session sont stockés dans PostgreSQL. Les secrets ne sont jamais renvoyés dans les réponses.
+Les mots de passe sont hachés avec scrypt; seuls les condensats des jetons de session sont stockés dans PostgreSQL. Les secrets ne sont jamais renvoyés dans les réponses. Les données personnelles des participants ne sont jamais retournées par les routes publiques.
 
-Le formulaire de connexion Netlify, la vérification du guard Admin, la déconnexion, la modification du profil, la gestion des comptes et ces trois modules documentaires utilisent les routes API. Le jeton Bearer est conservé dans `sessionStorage` (onglet courant). Les autres CRUD non mentionnés restent locaux. Les copies localStorage des trois modules raccordés sont laissées intactes mais ne sont pas lues/importées par les pages raccordées; aucune donnée locale n'est effacée automatiquement.
+Le portail admin, le profil, la gestion des comptes, les contenus éditoriaux, les documents et réglages, les catalogues de formations/événements et leurs inscriptions utilisent l'API. Le jeton Bearer est conservé dans `sessionStorage` (onglet courant). Les autres CRUD non mentionnés, notamment emplois/candidatures et GOPI/commandes, restent dans leur stockage antérieur jusqu'au raccordement de ces modules.

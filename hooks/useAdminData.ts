@@ -1,16 +1,17 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCrud, useObjectStorage } from './useCrud';
-import { DEFAULT_FORMATIONS, DEFAULT_FORMATION_REGISTRATIONS, DEFAULT_GOPI, DEFAULT_GOPI_ORDERS, DEFAULT_EVENTS, DEFAULT_EVENT_REGISTRATIONS, DEFAULT_JOBS } from '../constants';
+import { DEFAULT_GOPI, DEFAULT_GOPI_ORDERS, DEFAULT_JOBS } from '../constants';
 import { useApiEditorial } from './useApiEditorial';
 import { useApiLibrary } from './useApiLibrary';
 import { useApiSiteSettings } from './useApiSiteSettings';
+import { useApiProgrammes } from './useApiProgrammes';
 import { describeCrudAction } from '../utils/notificationMessages';
 import { canTransitionGopiOrder, GOPI_PAYMENT_METHODS } from '../utils/gopiLogic';
 import { normalizeAnnouncementDraft, validateAnnouncementText } from '../utils/announcementLogic';
 import { normalizeNewsDraft, validateNewsDraft } from '../utils/editorialLogic';
 import { JOB_STATUSES, normalizeJobOfferDraft, validateJobOfferDraft } from '../utils/jobLogic';
-import { normalizeEventDraft, normalizeEventRegistrationDraft, validateEventDraft, validateEventRegistrationDraft } from '../utils/eventLogic';
+
 import { Slide, NewsItem, Announcement, Formation, FormationRegistration, JobOffer, JobApplication, GopiItem, GopiOrder, Event, EventRegistration, Notification, SystemNotification, ActivityLog } from '../types';
 
 const READ_NOTIFICATIONS_KEY = 'omapi_read_notifications';
@@ -95,43 +96,21 @@ export const useAdminData = () => {
 
   // 4. Formulaires et guides : API OMAPI; les anciennes copies localStorage restent intactes.
 
-  // 5. Formations
-  const { items: formations, saveItem: saveFormation, deleteItem: deleteFormationBase } = useCrud<Formation>('omapi_formations', DEFAULT_FORMATIONS, addNotification);
-  const { items: formationRegistrations, saveItem: saveFormationRegistration, deleteItem: deleteFormationRegistration } = useCrud<FormationRegistration>('omapi_formation_registrations', DEFAULT_FORMATION_REGISTRATIONS, addNotification);
-
-  const deleteFormation = async (id: number): Promise<boolean | string> => {
-    let latestFormations = formations;
-    let latestRegistrations = formationRegistrations;
-    try {
-      const savedFormations = localStorage.getItem('omapi_formations');
-      const savedRegistrations = localStorage.getItem('omapi_formation_registrations');
-      if (savedFormations !== null) {
-        const parsed = JSON.parse(savedFormations);
-        if (!Array.isArray(parsed)) throw new Error('Catalogue illisible');
-        latestFormations = parsed;
-      }
-      if (savedRegistrations !== null) {
-        const parsed = JSON.parse(savedRegistrations);
-        if (!Array.isArray(parsed)) throw new Error('Inscriptions illisibles');
-        latestRegistrations = parsed;
-      }
-    } catch {
-      return 'Suppression annulée : impossible de vérifier les inscriptions liées. Rechargez le module puis réessayez.';
+  // 5. Formations et événements : catalogues publics, opérations d’administration
+  // authentifiées et inscriptions conservées privées côté API.
+  const programmes = useApiProgrammes(addNotification, 'all', true);
+  const { formations, formationRegistrations, events, eventRegistrations } = programmes;
+  const saveFormation = async (draft: Partial<Formation>): Promise<boolean> => Boolean(await programmes.saveFormation(draft));
+  const saveFormationRegistration = programmes.saveFormationRegistration;
+  const deleteFormationRegistration = programmes.deleteFormationRegistration;
+  const deleteFormation = async (id: number | string): Promise<boolean | string> => {
+    const formation = formations.find((item) => String(item.id) === String(id));
+    if (!formation) return 'Cette formation n’existe plus dans le catalogue. Actualisez la page puis réessayez.';
+    const linkedCount = formationRegistrations.filter((registration) => String(registration.formationId) === String(id)).length;
+    if (linkedCount > 0) {
+      return `Suppression refusée : « ${formation.title} » compte ${linkedCount} inscription${linkedCount > 1 ? 's' : ''}. Ouvrez « Voir les inscrits » et supprimez ou gérez ces demandes avant de retirer la formation.`;
     }
-
-    const formation = latestFormations.find((item) => String(item.id) === String(id));
-    if (!formation) {
-      return 'Cette formation n’existe plus dans le catalogue. Actualisez la page puis réessayez.';
-    }
-
-    const registrationCount = latestRegistrations.filter(
-      (registration) => String(registration.formationId) === String(formation.id),
-    ).length;
-    if (registrationCount > 0) {
-      return `Suppression refusée : « ${formation.title} » compte ${registrationCount} inscription${registrationCount > 1 ? 's' : ''}. Ouvrez « Voir les inscrits » et supprimez ou gérez ces demandes avant de retirer la formation.`;
-    }
-
-    return deleteFormationBase(id);
+    return programmes.deleteFormation(id);
   };
 
   // 6. GOPI & Orders
@@ -261,54 +240,17 @@ export const useAdminData = () => {
     return persistJobApplication(application);
   };
 
-  // 8. Events & Registrations
-  const { items: events, saveItem: persistEvent, deleteItem: deleteEventRecord } = useCrud<Event>('omapi_events', DEFAULT_EVENTS, addNotification);
-  const { items: eventRegistrations, saveItem: persistEventRegistration, deleteItem: deleteEventRegistration } = useCrud<EventRegistration>('omapi_event_registrations', DEFAULT_EVENT_REGISTRATIONS, addNotification);
-
-  const saveEvent = async (draft: Partial<Event>) => {
-    const validationError = validateEventDraft(draft);
-    if (validationError) {
-      addNotification(`Événement non enregistré : ${validationError}`, 'error');
+  // 8. Événements et inscriptions : même API centralisée que les formations.
+  const saveEvent = async (draft: Partial<Event>): Promise<boolean> => Boolean(await programmes.saveEvent(draft));
+  const saveEventRegistration = programmes.saveEventRegistration;
+  const deleteEventRegistration = programmes.deleteEventRegistration;
+  const deleteEvent = async (id: number | string): Promise<boolean> => {
+    const linkedCount = eventRegistrations.filter((registration) => String(registration.eventId) === String(id)).length;
+    if (linkedCount > 0) {
+      addNotification(`Suppression refusée : ${linkedCount} inscription(s) sont liées à cet événement. Supprimez d’abord les inscriptions afin de préserver l’historique.`, 'error');
       return false;
     }
-    return persistEvent(normalizeEventDraft(draft));
-  };
-
-  const deleteEvent = async (id: number | string) => {
-    try {
-      const rawRegistrations = localStorage.getItem('omapi_event_registrations');
-      const currentRegistrations: unknown = rawRegistrations === null ? eventRegistrations : JSON.parse(rawRegistrations);
-      if (!Array.isArray(currentRegistrations)) throw new Error('Invalid registration data');
-      const linkedCount = currentRegistrations.filter((registration) => registration && String(registration.eventId) === String(id)).length;
-      if (linkedCount > 0) {
-        addNotification(`Suppression refusée : ${linkedCount} inscription(s) sont liées à cet événement. Annulez l’événement ou supprimez d’abord ses participants afin de préserver l’historique.`, 'error');
-        return false;
-      }
-    } catch {
-      addNotification('Suppression refusée : impossible de vérifier les inscriptions liées à cet événement.', 'error');
-      return false;
-    }
-    return deleteEventRecord(id);
-  };
-
-  const saveEventRegistration = async (draft: Partial<EventRegistration>) => {
-    if (draft.eventId === undefined || draft.eventId === null) {
-      addNotification('Inscription refusée : événement manquant.', 'error');
-      return false;
-    }
-    const event = events.find((item) => String(item.id) === String(draft.eventId));
-    if (!event) {
-      addNotification('Inscription refusée : cet événement n’existe plus.', 'error');
-      return false;
-    }
-    const normalized = normalizeEventRegistrationDraft(draft);
-    const comparableRegistrations = eventRegistrations.filter((item) => String(item.id) !== String(draft.id));
-    const validationError = validateEventRegistrationDraft(normalized, event, comparableRegistrations);
-    if (validationError) {
-      addNotification(`Inscription refusée : ${validationError}`, 'error');
-      return false;
-    }
-    return persistEventRegistration(normalized);
+    return programmes.deleteEvent(id);
   };
 
   // 9. Législation et réglages du site : API OMAPI; aucune copie locale n'est effacée ni importée.

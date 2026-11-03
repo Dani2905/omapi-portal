@@ -144,6 +144,8 @@ export interface Event {
   places?: string; // Ex: "Limité à 50 places" ou "Entrée libre"
   fileUrl?: string; // URL du document joint (programme, présentation)
   fileName?: string; // Nom du document
+  /** Nombre agrégé uniquement; les coordonnées des inscrits restent privées. */
+  registrationCount?: number;
 }
 
 export interface EventRegistration {

@@ -3,16 +3,13 @@ import { useLocation, Link } from 'react-router-dom';
 import { useCrud } from '../hooks/useCrud';
 import { useApiLibrary } from '../hooks/useApiLibrary';
 import { useApiEditorial } from '../hooks/useApiEditorial';
+import { useApiProgrammes } from '../hooks/useApiProgrammes';
 import { getLibraryPlainText } from '../utils/documentLibraryLogic';
 import { getNewsPlainText } from '../utils/editorialLogic';
 import { normalizeEventRecord } from '../utils/eventLogic';
 import { Formation, Event, GopiItem } from '../types';
 import Breadcrumb from '../components/Breadcrumb';
-import {
-  DEFAULT_FORMATIONS,
-  DEFAULT_EVENTS,
-  DEFAULT_GOPI,
-} from '../constants';
+import { DEFAULT_GOPI } from '../constants';
 
 const SearchResults: React.FC = () => {
   const location = useLocation();
@@ -22,8 +19,7 @@ const SearchResults: React.FC = () => {
 
   const { newsItems: news } = useApiEditorial(undefined, 'news');
   const { forms, guides, legislationItems: legislation } = useApiLibrary(undefined);
-  const { items: formations } = useCrud<Formation>('omapi_formations', DEFAULT_FORMATIONS);
-  const { items: events } = useCrud<Event>('omapi_events', DEFAULT_EVENTS);
+  const { formations, events } = useApiProgrammes(undefined, 'all');
   const { items: gopi } = useCrud<GopiItem>('omapi_gopi', DEFAULT_GOPI);
   const safeEvents = (Array.isArray(events) ? events : []).map(normalizeEventRecord).filter((item): item is Event => item !== null);
 

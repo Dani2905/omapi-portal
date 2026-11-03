@@ -1,11 +1,10 @@
 
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
-import { DEFAULT_FORMATIONS, DEFAULT_FORMATION_REGISTRATIONS } from '../constants';
-import { Formation, FormationRegistration } from '../types';
-import { useCrud } from '../hooks/useCrud';
+import { Formation } from '../types';
+import { useApiProgrammes } from '../hooks/useApiProgrammes';
 import { normalizeFormationRegistration, validateFormationRegistration } from '../utils/formationLogic';
 
 // --- Heroicons ---
@@ -83,8 +82,7 @@ const ArrowDownTrayIcon = ({ className }: { className?: string }) => (
 );
 
 const Formations: React.FC = () => {
-  const { items: formations } = useCrud<Formation>('omapi_formations', DEFAULT_FORMATIONS);
-  const { items: registrations, saveItem: saveRegistration } = useCrud<FormationRegistration>('omapi_formation_registrations', DEFAULT_FORMATION_REGISTRATIONS);
+  const { formations, submitFormationRegistration } = useApiProgrammes(undefined, 'formations');
   
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -127,7 +125,7 @@ const Formations: React.FC = () => {
     if (isSubmittingRegistration) return;
 
     const normalized = normalizeFormationRegistration(formData);
-    const validationError = validateFormationRegistration(normalized, selectedFormation, registrations);
+    const validationError = validateFormationRegistration(normalized, selectedFormation, []);
     if (validationError) {
       setRegistrationError(validationError);
       return;
@@ -136,25 +134,13 @@ const Formations: React.FC = () => {
     setRegistrationError(null);
     setIsSubmittingRegistration(true);
     try {
-      const newRegistration: FormationRegistration = {
-        ...normalized,
-        id: Date.now(),
-        formationId: selectedFormation!.id,
-        name: normalized.name,
-        email: normalized.email,
-        phone: normalized.phone || '',
-        organization: normalized.organization || '',
-        message: normalized.message || '',
-        registrationDate: new Date().toISOString(),
-      };
-
-      const saved = await saveRegistration(newRegistration);
-      if (!saved) {
-        setRegistrationError("L'inscription n'a pas pu être enregistrée dans cette démonstration locale. Vos informations restent dans le formulaire ; réessayez.");
+      const result = await submitFormationRegistration({ ...normalized, formationId: selectedFormation!.id });
+      if (result.ok === false) {
+        setRegistrationError(result.error);
         return;
       }
 
-      alert(`Votre demande pour « ${selectedFormation!.title} » a été enregistrée dans la démonstration locale sur ce navigateur. L’envoi à l’OMAPI et la prise de contact ne sont pas encore automatisés.`);
+      alert(`Votre demande pour « ${selectedFormation!.title} » a bien été transmise à l’OMAPI.`);
       setIsModalOpen(false);
       setSelectedFormation(null);
       setFormData({ name: '', email: '', phone: '', organization: '', message: '' });

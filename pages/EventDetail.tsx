@@ -2,9 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useParams, Link, Navigate } from 'react-router-dom';
 import { CalendarDays, Clock3, MapPin, Ticket, X, FileText, AlertCircle, CheckCircle } from 'lucide-react';
 import Breadcrumb from '../components/Breadcrumb';
-import { DEFAULT_EVENTS, DEFAULT_EVENT_REGISTRATIONS } from '../constants';
-import type { Event, EventRegistration } from '../types';
-import { useCrud } from '../hooks/useCrud';
+import type { Event } from '../types';
+import { useApiProgrammes } from '../hooks/useApiProgrammes';
 import {
   formatEventDate,
   getEffectiveEventStatus,
@@ -13,7 +12,6 @@ import {
   isSafeEventDocument,
   isSafeEventImage,
   normalizeEventRecord,
-  normalizeEventRegistration,
   normalizeEventRegistrationDraft,
   normalizeEventDownloadName,
   validateEventRegistrationDraft,
@@ -30,8 +28,7 @@ const EventDetail: React.FC = () => {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submissionLock = useRef(false);
-  const { items: allEvents, loading: crudLoading } = useCrud<Event>('omapi_events', DEFAULT_EVENTS);
-  const { items: registrations, saveItem: saveRegistration } = useCrud<EventRegistration>('omapi_event_registrations', DEFAULT_EVENT_REGISTRATIONS);
+  const { events: allEvents, loading: crudLoading, submitEventRegistration } = useApiProgrammes(undefined, 'events');
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -43,8 +40,7 @@ const EventDetail: React.FC = () => {
   }, [id, allEvents, crudLoading]);
 
   const effectiveStatus = event ? getEffectiveEventStatus(event) : null;
-  const safeRegistrations = (Array.isArray(registrations) ? registrations : []).map(normalizeEventRegistration).filter((item): item is EventRegistration => item !== null);
-  const eventRegistrationCount = event ? safeRegistrations.filter((item) => String(item.eventId) === String(event.id)).length : 0;
+  const eventRegistrationCount = event ? event.registrationCount || 0 : 0;
   const eventCapacity = event ? getEventCapacity(event.places) : null;
   const isEventFull = eventCapacity !== null && eventRegistrationCount >= eventCapacity;
   const registrationOpen = Boolean(event && isEventRegistrationOpen(event) && !isEventFull);
@@ -61,39 +57,14 @@ const EventDetail: React.FC = () => {
     if (submissionLock.current || !event) return;
     setFormError('');
 
-    let latestEvent = event;
-    let latestRegistrations: EventRegistration[] = Array.isArray(registrations) ? registrations.map(normalizeEventRegistration).filter((item): item is EventRegistration => item !== null) : [];
-    try {
-      const storedEvents = localStorage.getItem('omapi_events');
-      if (storedEvents !== null) {
-        const parsed: unknown = JSON.parse(storedEvents);
-        if (!Array.isArray(parsed)) throw new Error('Invalid event list');
-        latestEvent = parsed.map(normalizeEventRecord).find((item): item is Event => Boolean(item && String(item.id) === String(event.id))) as Event;
-      }
-      const storedRegistrations = localStorage.getItem('omapi_event_registrations');
-      if (storedRegistrations !== null) {
-        const parsed: unknown = JSON.parse(storedRegistrations);
-        if (!Array.isArray(parsed)) throw new Error('Invalid registration list');
-        latestRegistrations = parsed.map(normalizeEventRegistration).filter((item): item is EventRegistration => item !== null);
-      }
-    } catch {
-      setFormError("Impossible de vérifier les inscriptions actuellement. Actualisez la page puis réessayez.");
-      return;
-    }
-
-    if (!latestEvent) {
-      setFormError("Cet événement n’existe plus. Revenez à l’agenda pour choisir un autre événement.");
-      return;
-    }
-
     const draft = normalizeEventRegistrationDraft({
-      eventId: latestEvent.id,
+      eventId: event.id,
       name: formData.name,
       email: formData.email,
       phone: formData.phone,
       organization: formData.org,
     });
-    const validationError = validateEventRegistrationDraft(draft, latestEvent, latestRegistrations);
+    const validationError = validateEventRegistrationDraft(draft, event, []);
     if (validationError) {
       setFormError(validationError);
       return;
@@ -102,17 +73,9 @@ const EventDetail: React.FC = () => {
     submissionLock.current = true;
     setIsSubmitting(true);
     try {
-      const registration: Omit<EventRegistration, 'id'> = {
-        eventId: latestEvent.id,
-        name: draft.name || '',
-        email: draft.email || '',
-        phone: draft.phone || '',
-        ...(draft.organization ? { organization: draft.organization } : {}),
-        registrationDate: new Date().toISOString(),
-      };
-      const saved = await saveRegistration(registration);
-      if (!saved) {
-        setFormError("L’inscription n’a pas pu être enregistrée dans ce navigateur. Vérifiez l’espace disponible puis réessayez.");
+      const result = await submitEventRegistration(draft);
+      if (result.ok === false) {
+        setFormError(result.error);
         return;
       }
       setSubmitSuccess(true);

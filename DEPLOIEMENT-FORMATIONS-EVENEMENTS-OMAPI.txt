@@ -1,0 +1,19 @@
+Déploiement — Formations, événements et inscriptions
+
+1. Autorisations PostgreSQL
+- Dans phpPgAdmin, sélectionnez la base `ciprabem_omapi_portal`.
+- Ouvrez le lien « SQL » en haut à droite, collez le contenu de `backend/schema/grant_programme_permissions.sql`, puis cliquez « Lancer ».
+- Ce script accorde les droits au rôle `ciprabem_omapi_api` sur les quatre tables déjà existantes et leurs séquences. Il ne crée ni ne modifie de table et n’importe aucune donnée.
+
+2. API cPanel
+- Remplacez le fichier `app.js` de l’application Node OMAPI par `backend/app.js` du projet.
+- Redémarrez l’application Node depuis cPanel.
+- Ne changez pas l’application du Cabinet, ses identifiants ou sa base.
+
+3. Portail web
+- Appliquez les fichiers de l’archive au projet OMAPI, puis vérifiez les changements dans GitHub Desktop avant de publier le site.
+- Après publication, les catalogues sont lus depuis l’API. Une lecture réussie supprime seulement les clés localStorage obsolètes `omapi_formations`, `omapi_formation_registrations`, `omapi_events` et `omapi_event_registrations`; aucune donnée de ces clés n’est importée.
+
+Confidentialité : les formulaires publics peuvent envoyer une inscription; les noms, coordonnées et messages ne sont consultables et supprimables que par un compte Admin/Éditeur authentifié. Les pages publiques reçoivent uniquement le nombre agrégé d’inscriptions d’un événement.
+
+Contrôles réalisés avant livraison : vérification TypeScript, tests métier Formations/Événements, syntaxe Node et build Vite. Le build signale uniquement un avertissement non bloquant de taille du bundle.

@@ -2,9 +2,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
-import { DEFAULT_EVENTS } from '../constants';
 import { Event } from '../types';
-import { useCrud } from '../hooks/useCrud';
+import { useApiProgrammes } from '../hooks/useApiProgrammes';
 import { formatEventDate, getEffectiveEventStatus, getLocalEventDate, normalizeEventRecord, parseEventDate, isSafeEventImage } from '../utils/eventLogic';
 import { getNewsPlainText } from '../utils/editorialLogic';
 
@@ -35,7 +34,7 @@ const ArrowRightIcon = ({ className }: { className?: string }) => (
 );
 
 const Events: React.FC = () => {
-  const { items: events } = useCrud<Event>('omapi_events', DEFAULT_EVENTS);
+  const { events } = useApiProgrammes(undefined, 'events');
   const safeEvents = (Array.isArray(events) ? events : [])
     .map(normalizeEventRecord)
     .filter((event): event is Event => event !== null)

@@ -89,6 +89,9 @@ export function normalizeEventRecord(value: unknown): Event | null {
     places: normalized.places || '',
     fileUrl: normalized.fileUrl || '',
     fileName: normalized.fileName || '',
+    ...(Number.isSafeInteger(Number(record.registrationCount)) && Number(record.registrationCount) >= 0
+      ? { registrationCount: Number(record.registrationCount) }
+      : {}),
   };
 }
 

@@ -183,6 +183,108 @@ const libraryConfig = {
   },
 };
 
+
+const FORMATION_CATEGORIES = ['Base', 'Avancee'];
+const FORMATION_THEMES = ['blue', 'emerald', 'amber', 'rose', 'indigo', 'purple', 'cyan'];
+const PROGRAM_EVENT_STATUSES = ['À venir', 'En cours', 'Terminé', 'Annulé'];
+const programmeConfig = {
+  formations: {
+    table: 'formations',
+    select: 'id, title, category, event_date, event_time, location, description, conditions, color_theme, file_url, file_name',
+    publicSelect: 'id, title, category, event_date, event_time, location, description, conditions, color_theme, file_url, file_name',
+    dbColumns: ['title', 'category', 'event_date', 'event_time', 'location', 'description', 'conditions', 'color_theme', 'file_url', 'file_name'],
+    normalize(body) {
+      const item = {
+        title: cleanText(body?.title, 120),
+        category: cleanText(body?.category, 20),
+        date: typeof (body?.date ?? body?.event_date) === 'string' ? String(body.date ?? body.event_date).trim() : '',
+        time: cleanText(body?.time ?? body?.event_time, 80),
+        location: cleanText(body?.location, 200),
+        description: typeof body?.description === 'string' ? body.description.trim() : '',
+        conditions: typeof body?.conditions === 'string' ? body.conditions.trim() : '',
+        colorTheme: typeof (body?.colorTheme ?? body?.color_theme) === 'string' ? String(body.colorTheme ?? body.color_theme).trim() : '',
+        fileUrl: typeof (body?.fileUrl ?? body?.file_url) === 'string' ? String(body.fileUrl ?? body.file_url).trim() : '',
+        fileName: cleanText(body?.fileName ?? body?.file_name, 120),
+      };
+      if (item.title.length < 3 || !FORMATION_CATEGORIES.includes(item.category) || item.date && !isIsoDate(item.date) || item.time.length > 80 || item.location.length > 200 || item.description.length > 5000 || item.conditions.length > 2000 || item.colorTheme && !FORMATION_THEMES.includes(item.colorTheme) || item.fileUrl && !isSafeLibraryFileValue(item.fileUrl)) {
+        return { error: 'Formation item is invalid' };
+      }
+      return { item };
+    },
+    values: (item) => [item.title, item.category, item.date || null, item.time, item.location, item.description, item.conditions, item.colorTheme || null, item.fileUrl || null, item.fileName || null],
+    mapRow: (row) => ({ id: Number(row.id), title: row.title, category: row.category, date: row.event_date ? formatDbDate(row.event_date) : '', time: row.event_time || '', location: row.location || '', description: row.description || '', conditions: row.conditions || '', colorTheme: row.color_theme || undefined, fileUrl: row.file_url || '', fileName: row.file_name || '', ...(row.registration_count === undefined ? {} : { registrationCount: Number(row.registration_count) || 0 }) }),
+  },
+  events: {
+    table: 'events',
+    select: 'id, title, event_date, event_time, location, description, image_url, status, places, file_url, file_name',
+    publicSelect: 'id, title, event_date, event_time, location, description, image_url, status, places, file_url, file_name, (SELECT COUNT(*) FROM event_registrations r WHERE r.event_id = events.id) AS registration_count',
+    dbColumns: ['title', 'event_date', 'event_time', 'location', 'description', 'image_url', 'status', 'places', 'file_url', 'file_name'],
+    normalize(body) {
+      const item = {
+        title: cleanText(body?.title, 180),
+        date: typeof (body?.date ?? body?.event_date) === 'string' ? String(body.date ?? body.event_date).trim() : '',
+        time: cleanText(body?.time ?? body?.event_time, 80),
+        location: cleanText(body?.location, 180),
+        description: typeof body?.description === 'string' ? body.description.trim() : '',
+        image: typeof (body?.image ?? body?.image_url) === 'string' ? String(body.image ?? body.image_url).trim() : '',
+        status: cleanText(body?.status, 30),
+        places: cleanText(body?.places, 180),
+        fileUrl: typeof (body?.fileUrl ?? body?.file_url) === 'string' ? String(body.fileUrl ?? body.file_url).trim() : '',
+        fileName: cleanText(body?.fileName ?? body?.file_name, 120),
+      };
+      if (item.title.length < 3 || !isIsoDate(item.date) || !isValidProgramEventTime(item.time) || !item.location || !PROGRAM_EVENT_STATUSES.includes(item.status) || item.description.length > 20000 || item.places.length > 180 || !isSafeImageValue(item.image) || item.fileUrl && !isSafeLibraryFileValue(item.fileUrl)) {
+        return { error: 'Event item is invalid' };
+      }
+      return { item };
+    },
+    values: (item) => [item.title, item.date, item.time, item.location, item.description, item.image, item.status, item.places || null, item.fileUrl || null, item.fileName || null],
+    mapRow: (row) => ({ id: Number(row.id), title: row.title, date: formatDbDate(row.event_date), time: row.event_time || '', location: row.location || '', description: row.description || '', image: row.image_url || '', status: row.status, places: row.places || '', fileUrl: row.file_url || '', fileName: row.file_name || '', ...(row.registration_count === undefined ? {} : { registrationCount: Number(row.registration_count) || 0 }) }),
+  },
+};
+
+function programmeTable(collection) {
+  return programmeConfig[collection] || null;
+}
+
+function isIsoDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function formatDbDate(value) {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return typeof value === 'string' ? value.slice(0, 10) : '';
+}
+
+function isValidProgramEventTime(value) {
+  if (typeof value !== 'string') return false;
+  return /^(?:[01]\d|2[0-3]):[0-5]\d(?: - (?:[01]\d|2[0-3]):[0-5]\d)?$/.test(value);
+}
+
+function normalizeRegistration(body, kind) {
+  const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
+  const item = {
+    parentId: Number(kind === 'events' ? body?.eventId : body?.formationId),
+    name: cleanText(body?.name, 160).replace(/\s+/g, ' '),
+    email,
+    phone: cleanText(body?.phone, 50),
+    organization: cleanText(body?.organization, 200).replace(/\s+/g, ' '),
+    ...(kind === 'formations' ? { message: typeof body?.message === 'string' ? body.message.trim().slice(0, 2000) : '' } : {}),
+  };
+  if (!Number.isSafeInteger(item.parentId) || item.parentId < 1 || item.name.length < 2 || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || item.phone.length > 50 || kind === 'events' && item.phone.length < 3 || item.organization.length > 200 || item.message?.length > 2000) {
+    return { error: 'Registration data is invalid' };
+  }
+  return { item };
+}
+
+function eventCapacityFromPlaces(value) {
+  if (typeof value !== 'string') return null;
+  const match = /(?:capacit[ée]|maximum|max|limit[ée]e?s?)\D{0,16}(\d{1,6})|(\d{1,6})\s*(?:places?|participants?|inscriptions?)/i.exec(value.trim());
+  const count = Number(match?.[1] || match?.[2]);
+  return Number.isSafeInteger(count) && count >= 0 ? count : null;
+}
+
 function cleanText(value, maximum) {
   return typeof value === 'string' ? value.trim().slice(0, maximum) : '';
 }
@@ -735,10 +837,10 @@ app.get('/api/content/settings', async (_request, response) => {
 
 app.get('/api/content/:collection', async (request, response) => {
   response.set('Cache-Control', 'no-store');
-  const config = editorialTable(request.params.collection) || libraryTable(request.params.collection);
+  const config = editorialTable(request.params.collection) || libraryTable(request.params.collection) || programmeTable(request.params.collection);
   if (!config) return response.status(404).json({ error: 'Content collection not found' });
   try {
-    const { rows } = await pool.query(`SELECT ${config.select} FROM ${config.table} ORDER BY id ASC`);
+    const { rows } = await pool.query(`SELECT ${config.publicSelect || config.select} FROM ${config.table} ORDER BY id ASC`);
     return response.json({ items: rows.map(config.mapRow) });
   } catch {
     console.error('OMAPI public content read failed');
@@ -888,6 +990,217 @@ app.delete('/api/admin/library/:collection/:id', requireAuth, requireContentMana
   } catch {
     console.error('OMAPI library delete failed');
     return response.status(503).json({ error: 'Library service unavailable' });
+  }
+});
+
+
+
+const publicRegistrationAttempts = new Map();
+function limitPublicRegistration(request, response, next) {
+  const now = Date.now();
+  const key = request.ip || request.socket?.remoteAddress || 'unknown';
+  const windowMs = 15 * 60 * 1000;
+  if (publicRegistrationAttempts.size > 1000) {
+    for (const [attemptKey, attempt] of publicRegistrationAttempts) {
+      if (now - attempt.startedAt >= windowMs) publicRegistrationAttempts.delete(attemptKey);
+    }
+  }
+  const current = publicRegistrationAttempts.get(key);
+  if (!current || now - current.startedAt >= windowMs) {
+    publicRegistrationAttempts.set(key, { startedAt: now, count: 1 });
+    return next();
+  }
+  if (current.count >= 8) {
+    response.set('Retry-After', String(Math.ceil((windowMs - (now - current.startedAt)) / 1000)));
+    return response.status(429).json({ error: 'Trop de demandes depuis cette adresse. Réessayez un peu plus tard.' });
+  }
+  current.count += 1;
+  return next();
+}
+
+app.post('/api/public/registrations/events', limitPublicRegistration, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const normalized = normalizeRegistration(request.body, 'events');
+  if (normalized.error) return response.status(400).json({ error: 'Veuillez vérifier les informations saisies.' });
+  const item = normalized.item;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const eventResult = await client.query(
+      "SELECT id, event_date, status, places, event_date < CURRENT_DATE AS is_past FROM events WHERE id = $1 FOR UPDATE",
+      [item.parentId],
+    );
+    if (!eventResult.rows.length) {
+      await client.query('ROLLBACK');
+      return response.status(404).json({ error: 'Cet événement n’est plus disponible.' });
+    }
+    const event = eventResult.rows[0];
+    if (!['À venir', 'En cours'].includes(event.status) || event.is_past) {
+      await client.query('ROLLBACK');
+      return response.status(409).json({ error: 'Les inscriptions pour cet événement sont fermées.' });
+    }
+    const capacity = eventCapacityFromPlaces(event.places);
+    if (capacity !== null) {
+      const countResult = await client.query('SELECT COUNT(*)::int AS count FROM event_registrations WHERE event_id = $1', [item.parentId]);
+      if (Number(countResult.rows[0]?.count || 0) >= capacity) {
+        await client.query('ROLLBACK');
+        return response.status(409).json({ error: 'Cet événement a atteint sa capacité maximale.' });
+      }
+    }
+    const inserted = await client.query(
+      `INSERT INTO event_registrations (event_id, name, email, phone, organization)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id, registration_date`,
+      [item.parentId, item.name, item.email, item.phone, item.organization || null],
+    );
+    await client.query('COMMIT');
+    return response.status(201).json({ ok: true, id: Number(inserted.rows[0].id), registrationDate: new Date(inserted.rows[0].registration_date).toISOString() });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (error?.code === '23505') return response.status(409).json({ error: 'Cette adresse e-mail est déjà inscrite à cet événement.' });
+    if (error?.code === '23503') return response.status(404).json({ error: 'Cet événement n’est plus disponible.' });
+    console.error('OMAPI event registration failed');
+    return response.status(503).json({ error: 'Le service d’inscription est momentanément indisponible.' });
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/api/public/registrations/formations', limitPublicRegistration, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const normalized = normalizeRegistration(request.body, 'formations');
+  if (normalized.error) return response.status(400).json({ error: 'Veuillez vérifier les informations saisies.' });
+  const item = normalized.item;
+  try {
+    const formationResult = await pool.query('SELECT id FROM formations WHERE id = $1', [item.parentId]);
+    if (!formationResult.rows.length) return response.status(404).json({ error: 'Cette formation n’est plus disponible.' });
+    const inserted = await pool.query(
+      `INSERT INTO formation_registrations (formation_id, name, email, phone, organization, message)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, registration_date`,
+      [item.parentId, item.name, item.email, item.phone, item.organization || null, item.message || null],
+    );
+    return response.status(201).json({ ok: true, id: Number(inserted.rows[0].id), registrationDate: new Date(inserted.rows[0].registration_date).toISOString() });
+  } catch (error) {
+    if (error?.code === '23505') return response.status(409).json({ error: 'Cette adresse e-mail est déjà inscrite à cette formation.' });
+    if (error?.code === '23503') return response.status(404).json({ error: 'Cette formation n’est plus disponible.' });
+    console.error('OMAPI formation registration failed');
+    return response.status(503).json({ error: 'Le service d’inscription est momentanément indisponible.' });
+  }
+});
+
+app.get('/api/admin/registrations/:collection', requireAuth, requireContentManager, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const kind = request.params.collection;
+  const config = kind === 'events'
+    ? { table: 'event_registrations', parentColumn: 'event_id', map: (row) => ({ id: Number(row.id), eventId: Number(row.event_id), name: row.name, email: row.email, phone: row.phone, ...(row.organization ? { organization: row.organization } : {}), registrationDate: new Date(row.registration_date).toISOString() }) }
+    : kind === 'formations'
+      ? { table: 'formation_registrations', parentColumn: 'formation_id', map: (row) => ({ id: Number(row.id), formationId: Number(row.formation_id), name: row.name, email: row.email, phone: row.phone, ...(row.organization ? { organization: row.organization } : {}), ...(row.message ? { message: row.message } : {}), registrationDate: new Date(row.registration_date).toISOString() }) }
+      : null;
+  if (!config) return response.status(404).json({ error: 'Registration collection not found' });
+  try {
+    const { rows } = await pool.query(`SELECT id, ${config.parentColumn}, name, email, phone, organization${kind === 'formations' ? ', message' : ''}, registration_date FROM ${config.table} ORDER BY registration_date DESC, id DESC`);
+    return response.json({ items: rows.map(config.map) });
+  } catch {
+    console.error('OMAPI admin registrations read failed');
+    return response.status(503).json({ error: 'Registration service unavailable' });
+  }
+});
+
+app.delete('/api/admin/registrations/:collection/:id', requireAuth, requireContentManager, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const kind = request.params.collection;
+  const table = kind === 'events' ? 'event_registrations' : kind === 'formations' ? 'formation_registrations' : null;
+  const id = validateEditorialId(request.params.id);
+  if (!table) return response.status(404).json({ error: 'Registration collection not found' });
+  if (!id) return response.status(400).json({ error: 'Registration id is invalid' });
+  try {
+    const result = await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]);
+    if (!result.rowCount) return response.status(404).json({ error: 'Registration not found' });
+    return response.json({ ok: true, id });
+  } catch {
+    console.error('OMAPI admin registration delete failed');
+    return response.status(503).json({ error: 'Registration service unavailable' });
+  }
+});
+
+app.get('/api/admin/programs/:collection', requireAuth, requireContentManager, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const config = programmeTable(request.params.collection);
+  if (!config) return response.status(404).json({ error: 'Program collection not found' });
+  try {
+    const { rows } = await pool.query(`SELECT ${config.select} FROM ${config.table} ORDER BY id ASC`);
+    return response.json({ items: rows.map(config.mapRow) });
+  } catch {
+    console.error('OMAPI admin programs read failed');
+    return response.status(503).json({ error: 'Program service unavailable' });
+  }
+});
+
+app.post('/api/admin/programs/:collection', requireAuth, requireContentManager, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const config = programmeTable(request.params.collection);
+  if (!config) return response.status(404).json({ error: 'Program collection not found' });
+  const normalized = config.normalize(request.body);
+  if (normalized.error) return response.status(400).json({ error: normalized.error });
+  const placeholders = config.dbColumns.map((_, index) => `$${index + 1}`).join(', ');
+  try {
+    const { rows } = await pool.query(`INSERT INTO ${config.table} (${config.dbColumns.join(', ')}) VALUES (${placeholders}) RETURNING ${config.select}`, config.values(normalized.item));
+    return response.status(201).json({ item: config.mapRow(rows[0]) });
+  } catch {
+    console.error('OMAPI program create failed');
+    return response.status(503).json({ error: 'Program service unavailable' });
+  }
+});
+
+app.patch('/api/admin/programs/:collection/:id', requireAuth, requireContentManager, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const config = programmeTable(request.params.collection);
+  if (!config) return response.status(404).json({ error: 'Program collection not found' });
+  const id = validateEditorialId(request.params.id);
+  if (!id) return response.status(400).json({ error: 'Program id is invalid' });
+  const normalized = config.normalize(request.body);
+  if (normalized.error) return response.status(400).json({ error: normalized.error });
+  const assignments = config.dbColumns.map((column, index) => `${column} = $${index + 1}`).join(', ');
+  try {
+    const { rows } = await pool.query(`UPDATE ${config.table} SET ${assignments}, updated_at = NOW() WHERE id = $${config.dbColumns.length + 1} RETURNING ${config.select}`, [...config.values(normalized.item), id]);
+    if (!rows.length) return response.status(404).json({ error: 'Program item not found' });
+    return response.json({ item: config.mapRow(rows[0]) });
+  } catch {
+    console.error('OMAPI program update failed');
+    return response.status(503).json({ error: 'Program service unavailable' });
+  }
+});
+
+app.delete('/api/admin/programs/:collection/:id', requireAuth, requireContentManager, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const kind = request.params.collection;
+  const config = programmeTable(kind);
+  const id = validateEditorialId(request.params.id);
+  if (!config) return response.status(404).json({ error: 'Program collection not found' });
+  if (!id) return response.status(400).json({ error: 'Program id is invalid' });
+  const registrationsTable = kind === 'events' ? 'event_registrations' : 'formation_registrations';
+  const foreignKey = kind === 'events' ? 'event_id' : 'formation_id';
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const parent = await client.query(`SELECT id FROM ${config.table} WHERE id = $1 FOR UPDATE`, [id]);
+    if (!parent.rows.length) {
+      await client.query('ROLLBACK');
+      return response.status(404).json({ error: 'Program item not found' });
+    }
+    const count = await client.query(`SELECT COUNT(*)::int AS count FROM ${registrationsTable} WHERE ${foreignKey} = $1`, [id]);
+    if (Number(count.rows[0]?.count || 0) > 0) {
+      await client.query('ROLLBACK');
+      return response.status(409).json({ error: 'Cet élément possède encore des inscriptions; supprimez-les avant de supprimer le catalogue.' });
+    }
+    await client.query(`DELETE FROM ${config.table} WHERE id = $1`, [id]);
+    await client.query('COMMIT');
+    return response.json({ ok: true, id });
+  } catch {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('OMAPI program delete failed');
+    return response.status(503).json({ error: 'Program service unavailable' });
+  } finally {
+    client.release();
   }
 });
 
