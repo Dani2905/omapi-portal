@@ -2,9 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
 import { Briefcase, Upload, CheckCircle, AlertCircle } from 'lucide-react';
-import { useCrud } from '../hooks/useCrud';
+import { useApiRemainingModules } from '../hooks/useApiRemainingModules';
 import { JobOffer, JobApplication } from '../types';
-import { DEFAULT_JOBS } from '../constants';
 import {
   getApplicationFileMime,
   isJobOpenOnDate,
@@ -20,8 +19,7 @@ const Apply: React.FC = () => {
     ? stateJobId
     : new URLSearchParams(location.search).get('jobId');
   const [jobId, setJobId] = useState<string>(passedJobId ? String(passedJobId) : '');
-  const { items: jobs } = useCrud<JobOffer>('omapi_jobs', DEFAULT_JOBS, () => {});
-  const { saveItem: addApplication } = useCrud<JobApplication>('omapi_job_applications', [], () => {});
+  const { jobs, submitJobApplication } = useApiRemainingModules(undefined, 'jobs');
   const availableJobs = jobs.filter((job): job is JobOffer => Boolean(job && isJobOpenOnDate(job)));
 
   const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '', phone: '', message: '' });
@@ -116,18 +114,7 @@ const Apply: React.FC = () => {
 
     let selectedJob: JobOffer | undefined;
     if (jobId) {
-      let latestJobs = jobs;
-      try {
-        const storedJobs = localStorage.getItem('omapi_jobs');
-        if (storedJobs !== null) {
-          const parsed: unknown = JSON.parse(storedJobs);
-          if (Array.isArray(parsed)) latestJobs = parsed as JobOffer[];
-        }
-      } catch {
-        setError("Impossible de vérifier l'offre sélectionnée. Actualisez la page puis réessayez.");
-        return;
-      }
-      selectedJob = latestJobs.find((job) => job && String(job.id) === jobId && isJobOpenOnDate(job));
+      selectedJob = jobs.find((job) => job && String(job.id) === jobId && isJobOpenOnDate(job));
       if (!selectedJob) {
         setError("Cette offre n'est plus ouverte ou n'existe plus. Choisissez une offre actuellement disponible ou envoyez une candidature spontanée.");
         return;
@@ -152,9 +139,9 @@ const Apply: React.FC = () => {
         ...(formData.message.trim() ? { message: formData.message.trim() } : {}),
         ...(coverLetterUrl && coverLetterFile ? { coverLetterUrl, coverLetterFileName: coverLetterFile.name } : {}),
       };
-      const saved = await addApplication(application);
-      if (!saved) {
-        setError("La candidature n'a pas pu être enregistrée dans ce navigateur. Libérez de l'espace puis réessayez.");
+      const result = await submitJobApplication(application);
+      if (result.ok === false) {
+        setError(result.error);
         return;
       }
       setSubmitSuccess(true);

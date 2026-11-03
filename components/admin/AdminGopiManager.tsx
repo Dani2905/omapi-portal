@@ -163,7 +163,7 @@ const AdminGopiManager: React.FC<AdminGopiManagerProps> = ({
 
   return (
     <div className="space-y-6">
-        <p className="rounded-sm border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Les demandes de la démonstration sont stockées uniquement dans ce navigateur. La confirmation de paiement et l’envoi du PDF doivent être faits manuellement ; aucune transaction ni aucun e-mail n’est automatisé.</p>
+        <p className="rounded-sm border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Les demandes sont enregistrées dans la base OMAPI. La confirmation du paiement et l’envoi du PDF restent manuels ; aucune transaction ni aucun e-mail n’est automatisé.</p>
         {/* Tabs */}
         <div className="flex space-x-1 bg-slate-200 p-1 rounded-sm w-fit">
             <button

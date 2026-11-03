@@ -3,14 +3,13 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
 import { Briefcase, MapPin, Clock } from 'lucide-react';
-import { useCrud } from '../hooks/useCrud';
+import { useApiRemainingModules } from '../hooks/useApiRemainingModules';
 import { JobOffer } from '../types';
-import { DEFAULT_JOBS } from '../constants';
 import 'react-quill-new/dist/quill.snow.css'; // Import for rich text styles
 import { isJobOpenOnDate, normalizeJobOfferDraft } from '../utils/jobLogic';
 
 const Jobs: React.FC = () => {
-  const { items: jobs } = useCrud<JobOffer>('omapi_jobs', DEFAULT_JOBS, () => {});
+  const { jobs } = useApiRemainingModules(undefined, 'jobs');
 
   const openJobs = jobs.filter((job): job is JobOffer => Boolean(job && isJobOpenOnDate(job)));
 

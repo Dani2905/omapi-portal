@@ -1,9 +1,8 @@
 
 import React, { useState } from 'react';
 import Breadcrumb from '../components/Breadcrumb';
-import { DEFAULT_GOPI, DEFAULT_GOPI_ORDERS } from '../constants';
-import { GopiItem, GopiOrder } from '../types';
-import { useCrud } from '../hooks/useCrud';
+import { GopiItem } from '../types';
+import { useApiRemainingModules } from '../hooks/useApiRemainingModules';
 import { GOPI_CATEGORIES, GOPI_PRICE_MGA, hasGopiPdf, normalizeGopiOrder, validateGopiOrder } from '../utils/gopiLogic';
 
 // --- Heroicons ---
@@ -51,8 +50,7 @@ const ShieldCheckIcon = ({ className }: { className?: string }) => (
 );
 
 const Gopi: React.FC = () => {
-  const { items: gopiList } = useCrud<GopiItem>('omapi_gopi', DEFAULT_GOPI);
-  const { saveItem: saveOrder } = useCrud<GopiOrder>('omapi_gopi_orders', DEFAULT_GOPI_ORDERS);
+  const { gopiItems: gopiList, submitGopiOrder } = useApiRemainingModules(undefined, 'gopi');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('Gazette Officielle');
   
@@ -156,27 +154,20 @@ const Gopi: React.FC = () => {
       setOrderError(null);
       setIsSubmittingOrder(true);
       try {
-        const newOrder: GopiOrder = {
-          id: Date.now(),
+        const result = await submitGopiOrder({
           gopiId: currentPublication!.id,
-          gopiTitle: currentPublication!.title,
           customerName: normalized.customerName,
           customerEmail: normalized.customerEmail,
           customerPhone: normalized.customerPhone,
-          date: new Date().toISOString(),
-          amountMGA: GOPI_PRICE_MGA,
-          status: 'En attente',
           paymentMethod: normalized.paymentMethod,
           transactionRef: normalized.transactionRef,
-        };
-
-        const saved = await saveOrder(newOrder);
-        if (!saved) {
-          setOrderError('La demande n’a pas pu être enregistrée dans cette démonstration locale. Vos informations restent dans le formulaire ; réessayez.');
+        });
+        if (result.ok === false) {
+          setOrderError(result.error);
           return;
         }
 
-        setOrderSuccess(`Merci ${normalized.customerName}. Votre demande pour « ${currentPublication!.title} » a été enregistrée dans le stockage local de ce navigateur. Le paiement doit être vérifié par l’OMAPI ; aucun e-mail ni PDF n’est envoyé automatiquement.`);
+        setOrderSuccess(`Merci ${normalized.customerName}. Votre demande pour « ${currentPublication!.title} » a bien été transmise à l’OMAPI. Le paiement et l’envoi du PDF seront traités manuellement.`);
         setIsModalOpen(false);
         setSelectedGopi(null);
         setOrderForm({ name: '', email: '', phone: '', paymentMethod: 'MVola', transactionRef: '' });

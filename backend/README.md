@@ -43,16 +43,20 @@ Ne placez aucun mot de passe, jeton ou secret dans GitHub, Netlify ou les fichie
 - `POST /api/admin/users` — création d’un compte; le mot de passe est haché côté serveur.
 - `PATCH /api/admin/users/:id` — modification du compte, des droits et du mot de passe temporaire éventuel.
 - `DELETE /api/admin/users/:id` — suppression protégée contre l’auto-suppression, la suppression du compte principal et celle du dernier Admin actif.
-- `GET /api/content/forms|guides|legislation|formations|events` — lecture publique des catalogues (pour les événements, seul un compte agrégé d'inscriptions est renvoyé, jamais les coordonnées des participants).
+- `GET /api/content/forms|guides|legislation|formations|events|jobs|gopi` — lecture publique des catalogues (pour les événements, seul un compte agrégé d'inscriptions est renvoyé; aucune candidature ni commande nominative n'est exposée).
 - `POST|PATCH|DELETE /api/admin/library/:collection[/:id]` — gestion sécurisée des collections documentaires par Admin/Éditeur.
-- `GET /api/admin/programs/:collection` et `POST|PATCH|DELETE /api/admin/programs/:collection[/:id]` — gestion authentifiée des catalogues formations et événements.
+- `GET /api/admin/programs/:collection` et `POST|PATCH|DELETE /api/admin/programs/:collection[/:id]` — gestion authentifiée des catalogues formations, événements, emplois et GOPI.
 - `POST /api/public/registrations/formations|events` — soumission publique d'une inscription; validation, prévention des doublons et limitation de débit côté serveur.
 - `GET /api/admin/registrations/formations|events` — consultation authentifiée des inscriptions nominatives.
 - `DELETE /api/admin/registrations/formations|events/:id` — suppression authentifiée d’une inscription.
+- `POST /api/public/job-applications` — candidature publique avec CV/lettre (PDF, DOC ou DOCX vérifiés côté serveur).
+- `GET /api/admin/job-applications`, `PATCH|DELETE /api/admin/job-applications/:id` — consultation, changement de statut et suppression authentifiés.
+- `POST /api/public/gopi-orders` — demande GOPI publique, prix et statut initial établis côté serveur.
+- `GET /api/admin/gopi/orders`, `PATCH|DELETE /api/admin/gopi/orders/:id` — consultation et gestion authentifiées des commandes.
 - `GET /api/content/settings` — lecture publique des réglages autorisés.
 - `PUT /api/admin/settings/site_config|home_resources` — sauvegarde sécurisée des réglages du site et des ressources d’accueil.
 - Les routes éditoriales restent disponibles pour actualités, carrousel et annonces.
 
 Les mots de passe sont hachés avec scrypt; seuls les condensats des jetons de session sont stockés dans PostgreSQL. Les secrets ne sont jamais renvoyés dans les réponses. Les données personnelles des participants ne sont jamais retournées par les routes publiques.
 
-Le portail admin, le profil, la gestion des comptes, les contenus éditoriaux, les documents et réglages, les catalogues de formations/événements et leurs inscriptions utilisent l'API. Le jeton Bearer est conservé dans `sessionStorage` (onglet courant). Les autres CRUD non mentionnés, notamment emplois/candidatures et GOPI/commandes, restent dans leur stockage antérieur jusqu'au raccordement de ces modules.
+Le portail admin, le profil, la gestion des comptes, les contenus éditoriaux, les documents et réglages, les formations/événements et leurs inscriptions, les offres/candidatures et les publications/commandes GOPI utilisent l'API. Les catalogues restent publics; candidatures, coordonnées et commandes sont uniquement accessibles aux Admin/Éditeurs authentifiés. Le jeton Bearer est conservé dans `sessionStorage` (onglet courant). GOPI ne déclenche ni paiement ni envoi automatique de PDF/e-mail.

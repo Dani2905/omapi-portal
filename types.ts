@@ -93,7 +93,8 @@ export interface GopiItem {
 
 export interface GopiOrder {
   id: number;
-  gopiId: number;
+  /** Peut être absent si la publication liée a été supprimée après traitement. */
+  gopiId?: number;
   gopiTitle: string;
   customerName: string;
   customerEmail: string;

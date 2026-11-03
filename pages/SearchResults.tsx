@@ -1,15 +1,15 @@
 import React, { useMemo } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { useCrud } from '../hooks/useCrud';
 import { useApiLibrary } from '../hooks/useApiLibrary';
 import { useApiEditorial } from '../hooks/useApiEditorial';
 import { useApiProgrammes } from '../hooks/useApiProgrammes';
+import { useApiRemainingModules } from '../hooks/useApiRemainingModules';
 import { getLibraryPlainText } from '../utils/documentLibraryLogic';
 import { getNewsPlainText } from '../utils/editorialLogic';
 import { normalizeEventRecord } from '../utils/eventLogic';
-import { Formation, Event, GopiItem } from '../types';
+import { Event } from '../types';
+import { isJobOpenOnDate } from '../utils/jobLogic';
 import Breadcrumb from '../components/Breadcrumb';
-import { DEFAULT_GOPI } from '../constants';
 
 const SearchResults: React.FC = () => {
   const location = useLocation();
@@ -20,7 +20,7 @@ const SearchResults: React.FC = () => {
   const { newsItems: news } = useApiEditorial(undefined, 'news');
   const { forms, guides, legislationItems: legislation } = useApiLibrary(undefined);
   const { formations, events } = useApiProgrammes(undefined, 'all');
-  const { items: gopi } = useCrud<GopiItem>('omapi_gopi', DEFAULT_GOPI);
+  const { jobs, gopiItems: gopi } = useApiRemainingModules(undefined, 'all');
   const safeEvents = (Array.isArray(events) ? events : []).map(normalizeEventRecord).filter((item): item is Event => item !== null);
 
   const results = useMemo(() => {
@@ -53,6 +53,10 @@ const SearchResults: React.FC = () => {
       [item.title, getNewsPlainText(item.description)].some((value) => value.toLocaleLowerCase('fr').includes(lowerQuery))
     ).map((item) => ({ ...item, resultType: 'Événement', link: `/events/${item.id}` }));
 
+    const matchedJobs = jobs.filter((item) => isJobOpenOnDate(item)
+      && [item.title, getNewsPlainText(item.description)].some((value) => value.toLocaleLowerCase('fr').includes(lowerQuery))
+    ).map((item) => ({ ...item, resultType: 'Emploi', link: '/jobs' }));
+
     const matchedGopi = gopi.filter(item => 
       item.title.toLowerCase().includes(lowerQuery) || 
       (item.description && item.description.toLowerCase().includes(lowerQuery))
@@ -65,9 +69,10 @@ const SearchResults: React.FC = () => {
       ...matchedGuides,
       ...matchedFormations,
       ...matchedEvents,
+      ...matchedJobs,
       ...matchedGopi
     ];
-  }, [lowerQuery, news, legislation, forms, guides, formations, events, gopi]);
+  }, [lowerQuery, news, legislation, forms, guides, formations, events, jobs, gopi]);
 
   return (
     <div className="bg-gray-50 min-h-screen pb-12">

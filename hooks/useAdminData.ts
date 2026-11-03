@@ -1,18 +1,17 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useCrud, useObjectStorage } from './useCrud';
-import { DEFAULT_GOPI, DEFAULT_GOPI_ORDERS, DEFAULT_JOBS } from '../constants';
+import { useCrud } from './useCrud';
 import { useApiEditorial } from './useApiEditorial';
 import { useApiLibrary } from './useApiLibrary';
 import { useApiSiteSettings } from './useApiSiteSettings';
 import { useApiProgrammes } from './useApiProgrammes';
+import { useApiRemainingModules } from './useApiRemainingModules';
 import { describeCrudAction } from '../utils/notificationMessages';
-import { canTransitionGopiOrder, GOPI_PAYMENT_METHODS } from '../utils/gopiLogic';
 import { normalizeAnnouncementDraft, validateAnnouncementText } from '../utils/announcementLogic';
 import { normalizeNewsDraft, validateNewsDraft } from '../utils/editorialLogic';
-import { JOB_STATUSES, normalizeJobOfferDraft, validateJobOfferDraft } from '../utils/jobLogic';
 
-import { Slide, NewsItem, Announcement, Formation, FormationRegistration, JobOffer, JobApplication, GopiItem, GopiOrder, Event, EventRegistration, Notification, SystemNotification, ActivityLog } from '../types';
+
+import { Slide, NewsItem, Announcement, Formation, FormationRegistration, JobOffer, JobApplication, GopiItem, Event, Notification, SystemNotification, ActivityLog } from '../types';
 
 const READ_NOTIFICATIONS_KEY = 'omapi_read_notifications';
 
@@ -113,132 +112,36 @@ export const useAdminData = () => {
     return programmes.deleteFormation(id);
   };
 
-  // 6. GOPI & Orders
-  const { items: gopiItems, saveItem: saveGopi, deleteItem: deleteGopiBase } = useCrud<GopiItem>('omapi_gopi', DEFAULT_GOPI, addNotification);
-  const { items: gopiOrders, saveItem: saveGopiOrder, deleteItem: deleteGopiOrder } = useCrud<GopiOrder>('omapi_gopi_orders', DEFAULT_GOPI_ORDERS, addNotification);
-
-  const readGopiList = <T,>(key: string, fallback: T[]): T[] => {
-    try {
-      const raw = localStorage.getItem(key);
-      if (raw === null) return fallback;
-      const parsed: unknown = JSON.parse(raw);
-      if (!Array.isArray(parsed)) throw new Error('Liste illisible');
-      return parsed as T[];
-    } catch {
-      throw new Error('Les données GOPI sont illisibles. Rechargez le module et réessayez.');
-    }
-  };
-
+  // 6. GOPI & commandes : catalogue public, données clients et actions de gestion
+  // accessibles uniquement via les routes authentifiées de l’API.
+  const commerce = useApiRemainingModules(addNotification, 'all', true);
+  const { gopiItems, gopiOrders, jobs, jobApplications } = commerce;
+  const saveGopi = async (draft: Partial<GopiItem>): Promise<boolean> => Boolean(await commerce.saveGopi(draft));
   const deleteGopi = async (id: number): Promise<boolean | string> => {
-    let latestItems: GopiItem[];
-    let latestOrders: GopiOrder[];
-    try {
-      latestItems = readGopiList('omapi_gopi', gopiItems);
-      latestOrders = readGopiList('omapi_gopi_orders', gopiOrders);
-    } catch (error) {
-      return error instanceof Error ? error.message : 'Suppression annulée : impossible de vérifier les commandes GOPI.';
-    }
-    const publication = latestItems.find((item) => String(item.id) === String(id));
+    const publication = gopiItems.find((item) => String(item.id) === String(id));
     if (!publication) return 'Cette publication n’existe plus. Actualisez la page puis réessayez.';
-    const openOrders = latestOrders.filter((order) => String(order.gopiId) === String(id)
+    const openOrders = gopiOrders.filter((order) => String(order.gopiId) === String(id)
       && (order.status === 'En attente' || order.status === 'Paiement confirmé'));
     if (openOrders.length) {
       return `Suppression refusée : « ${publication.title} » est liée à ${openOrders.length} demande${openOrders.length > 1 ? 's' : ''} encore à traiter. Annulez ou finalisez ces commandes avant de retirer la publication.`;
     }
-    return deleteGopiBase(id);
+    return commerce.deleteGopi(id);
   };
+  const updateGopiOrder = commerce.updateGopiOrder;
+  const deleteGopiOrder = commerce.deleteGopiOrder;
 
-  const updateGopiOrder = async (patch: Partial<GopiOrder>): Promise<boolean> => {
-    if (patch.id === undefined || !patch.status) {
-      addNotification('Mise à jour refusée : la commande ou son nouveau statut est manquant.', 'error');
-      return false;
-    }
-    let latestOrders: GopiOrder[];
-    try {
-      latestOrders = readGopiList('omapi_gopi_orders', gopiOrders);
-    } catch (error) {
-      addNotification(error instanceof Error ? error.message : 'Impossible de lire les commandes GOPI.', 'error');
-      return false;
-    }
-    const current = latestOrders.find((order) => String(order.id) === String(patch.id));
-    if (!current) {
-      addNotification('Cette commande n’existe plus. Actualisez la page puis réessayez.', 'error');
-      return false;
-    }
-    if (!canTransitionGopiOrder(current.status, patch.status)) {
-      addNotification(`Transition refusée : une commande « ${current.status} » ne peut pas devenir « ${patch.status} ».`, 'error');
-      return false;
-    }
-    if (patch.status === 'Paiement confirmé') {
-      const paymentMethod = String(patch.paymentMethod || '').trim();
-      const transactionRef = String(patch.transactionRef || '').trim();
-      if (!GOPI_PAYMENT_METHODS.includes(paymentMethod as typeof GOPI_PAYMENT_METHODS[number])) {
-        addNotification('Confirmation refusée : choisissez un moyen de paiement reconnu.', 'error');
-        return false;
-      }
-      if (paymentMethod !== 'Espèces' && paymentMethod !== 'Chèque' && transactionRef.length < 3) {
-        addNotification('Confirmation refusée : la référence de transaction est obligatoire.', 'error');
-        return false;
-      }
-    }
-    return saveGopiOrder({ ...patch, id: current.id }, 'id');
-  };
-
-  // 7b. Jobs
-  const { items: jobs, saveItem: persistJob, deleteItem: deleteJobRecord } = useCrud<JobOffer>('omapi_jobs', DEFAULT_JOBS, addNotification);
-  const { items: jobApplications, saveItem: persistJobApplication, deleteItem: deleteJobApplication } = useCrud<JobApplication>('omapi_job_applications', [], addNotification);
-
-  const saveJob = async (draft: Partial<JobOffer>) => {
-    const validationError = validateJobOfferDraft(draft);
-    if (validationError) {
-      addNotification(`Offre non enregistrée : ${validationError}`, 'error');
-      return false;
-    }
-    return persistJob(normalizeJobOfferDraft(draft));
-  };
-
-  const deleteJob = async (id: number | string) => {
-    try {
-      const rawApplications = localStorage.getItem('omapi_job_applications');
-      const currentApplications: JobApplication[] = rawApplications ? JSON.parse(rawApplications) : jobApplications;
-      const linkedCount = Array.isArray(currentApplications)
-        ? currentApplications.filter((application) => String(application.jobId) === String(id)).length
-        : 0;
-      if (linkedCount > 0) {
-        addNotification(`Suppression refusée : ${linkedCount} candidature(s) sont liées à cette offre. Fermez plutôt l’offre afin de préserver l’historique.`, 'error');
-        return false;
-      }
-    } catch {
-      addNotification('Suppression refusée : impossible de vérifier les candidatures liées à cette offre.', 'error');
-      return false;
-    }
-    return deleteJobRecord(id);
-  };
-
-  const saveJobApplication = async (application: Partial<JobApplication>) => {
-    if (application.id === undefined || application.id === null || application.status === undefined) {
+  // 7b. Offres d’emploi et candidatures. Les formulaires de candidature sont
+  // publics, mais leurs dossiers et pièces jointes ne sont lus que par l’API admin.
+  const saveJob = async (draft: Partial<JobOffer>): Promise<boolean> => Boolean(await commerce.saveJob(draft));
+  const deleteJob = async (id: number | string): Promise<boolean> => commerce.deleteJob(id);
+  const saveJobApplication = async (application: Partial<JobApplication>): Promise<boolean> => {
+    if (application.id === undefined || application.status === undefined) {
       addNotification('Mise à jour refusée : la candidature ou son nouveau statut est manquant.', 'error');
       return false;
     }
-    if (!['Nouvelle', 'En cours', 'Rejetée', 'Acceptée'].includes(application.status)) {
-      addNotification('Statut de candidature invalide : sélectionnez un statut reconnu.', 'error');
-      return false;
-    }
-
-    let currentApplications: unknown = jobApplications;
-    try {
-      const stored = localStorage.getItem('omapi_job_applications');
-      if (stored !== null) currentApplications = JSON.parse(stored);
-    } catch {
-      addNotification('Mise à jour refusée : impossible de vérifier la candidature enregistrée.', 'error');
-      return false;
-    }
-    if (!Array.isArray(currentApplications) || !currentApplications.some((item) => item && String(item.id) === String(application.id))) {
-      addNotification('Mise à jour refusée : cette candidature a été supprimée ou n’existe plus. Actualisez la liste.', 'error');
-      return false;
-    }
-    return persistJobApplication(application);
+    return commerce.updateJobApplicationStatus({ id: application.id }, application.status);
   };
+  const deleteJobApplication = commerce.deleteJobApplication;
 
   // 8. Événements et inscriptions : même API centralisée que les formations.
   const saveEvent = async (draft: Partial<Event>): Promise<boolean> => Boolean(await programmes.saveEvent(draft));
@@ -464,7 +367,7 @@ export const useAdminData = () => {
     formations, saveFormation, deleteFormation,
     formationRegistrations, saveFormationRegistration, deleteFormationRegistration,
     gopiItems, saveGopi, deleteGopi,
-    gopiOrders, saveGopiOrder, updateGopiOrder, deleteGopiOrder,
+    gopiOrders, updateGopiOrder, deleteGopiOrder,
     jobs, saveJob, deleteJob,
     jobApplications, saveJobApplication, deleteJobApplication,
     events, saveEvent, deleteEvent,

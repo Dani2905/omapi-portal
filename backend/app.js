@@ -187,6 +187,7 @@ const libraryConfig = {
 const FORMATION_CATEGORIES = ['Base', 'Avancee'];
 const FORMATION_THEMES = ['blue', 'emerald', 'amber', 'rose', 'indigo', 'purple', 'cyan'];
 const PROGRAM_EVENT_STATUSES = ['À venir', 'En cours', 'Terminé', 'Annulé'];
+const GOPI_API_CATEGORIES = ['Gazette Officielle', 'Inscription au Registre', 'Renouvellement', 'GOPI spéciale GMD', 'GOPI spéciale GDM'];
 const programmeConfig = {
   formations: {
     table: 'formations',
@@ -240,7 +241,61 @@ const programmeConfig = {
     values: (item) => [item.title, item.date, item.time, item.location, item.description, item.image, item.status, item.places || null, item.fileUrl || null, item.fileName || null],
     mapRow: (row) => ({ id: Number(row.id), title: row.title, date: formatDbDate(row.event_date), time: row.event_time || '', location: row.location || '', description: row.description || '', image: row.image_url || '', status: row.status, places: row.places || '', fileUrl: row.file_url || '', fileName: row.file_name || '', ...(row.registration_count === undefined ? {} : { registrationCount: Number(row.registration_count) || 0 }) }),
   },
+  jobs: {
+    table: 'jobs',
+    select: 'id, title, department, location, employment_type, experience, description, status, publish_date, deadline, file_url',
+    publicSelect: 'id, title, department, location, employment_type, experience, description, status, publish_date, deadline, file_url',
+    dbColumns: ['title', 'department', 'location', 'employment_type', 'experience', 'description', 'status', 'publish_date', 'deadline', 'file_url'],
+    normalize(body) {
+      const item = {
+        title: cleanText(body?.title, 180),
+        department: cleanText(body?.department, 160),
+        location: cleanText(body?.location, 180),
+        type: cleanText(body?.type ?? body?.employment_type, 30),
+        experience: cleanText(body?.experience, 180),
+        description: typeof body?.description === 'string' ? body.description.trim() : '',
+        status: cleanText(body?.status, 20),
+        publishDate: cleanText(body?.publishDate ?? body?.publish_date, 10),
+        deadline: cleanText(body?.deadline, 10),
+        fileUrl: typeof (body?.fileUrl ?? body?.file_url) === 'string' ? String(body.fileUrl ?? body.file_url).trim() : '',
+      };
+      if (item.title.length < 3 || !item.department || !item.location || !['CDI', 'CDD', 'Stage', 'Consultant'].includes(item.type) || !['Ouvert', 'Fermé'].includes(item.status) || !isIsoDate(item.publishDate) || item.deadline && !isIsoDate(item.deadline) || item.deadline && item.deadline < item.publishDate || !stripHtml(item.description).trim() || item.description.length > 50000 || item.fileUrl && !isSafeLibraryFileValue(item.fileUrl)) {
+        return { error: 'Job item is invalid' };
+      }
+      return { item };
+    },
+    values: (item) => [item.title, item.department, item.location, item.type, item.experience, item.description, item.status, item.publishDate, item.deadline || null, item.fileUrl || null],
+    mapRow: (row) => ({ id: Number(row.id), title: row.title, department: row.department || '', location: row.location || '', type: row.employment_type, experience: row.experience || '', description: row.description || '', status: row.status, publishDate: formatDbDate(row.publish_date), deadline: row.deadline ? formatDbDate(row.deadline) : '', fileUrl: row.file_url || '' }),
+  },
+  gopi: {
+    table: 'gopi_items',
+    select: 'id, title, publication_period, category, description, file_url, file_name, cover_image',
+    publicSelect: 'id, title, publication_period, category, description, file_url, file_name, cover_image',
+    dbColumns: ['title', 'publication_period', 'category', 'description', 'file_url', 'file_name', 'cover_image'],
+    normalize(body) {
+      const item = {
+        title: cleanText(body?.title, 180),
+        date: cleanText(body?.date ?? body?.publication_period, 100),
+        category: cleanText(body?.category, 80),
+        description: typeof body?.description === 'string' ? body.description.trim() : '',
+        fileUrl: typeof (body?.fileUrl ?? body?.file_url) === 'string' ? String(body.fileUrl ?? body.file_url).trim() : '',
+        fileName: cleanText(body?.fileName ?? body?.file_name, 140),
+        coverImage: typeof (body?.coverImage ?? body?.cover_image) === 'string' ? String(body.coverImage ?? body.cover_image).trim() : '',
+      };
+      const validPdf = !item.fileUrl || /^data:application\/pdf;base64,[a-z0-9+/=]+$/i.test(item.fileUrl) || /^https:\/\/.+\.pdf(?:[?#].*)?$/i.test(item.fileUrl);
+      if (item.title.length < 3 || !item.date || !GOPI_API_CATEGORIES.includes(item.category) || item.description.length > 5000 || !validPdf || item.fileUrl && !isSafeLibraryFileValue(item.fileUrl) || !isSafeImageValue(item.coverImage)) {
+        return { error: 'GOPI item is invalid' };
+      }
+      return { item };
+    },
+    values: (item) => [item.title, item.date, item.category, item.description, item.fileUrl || null, item.fileName || null, item.coverImage || null],
+    mapRow: (row) => ({ id: Number(row.id), title: row.title, date: row.publication_period, category: row.category, description: row.description || '', fileUrl: row.file_url || '', fileName: row.file_name || '', coverImage: row.cover_image || '' }),
+  },
 };
+
+function stripHtml(value) {
+  return typeof value === 'string' ? value.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&') : '';
+}
 
 function programmeTable(collection) {
   return programmeConfig[collection] || null;
@@ -276,6 +331,98 @@ function normalizeRegistration(body, kind) {
     return { error: 'Registration data is invalid' };
   }
   return { item };
+}
+
+
+const JOB_APPLICATION_STATUSES = ['Nouvelle', 'En cours', 'Rejetée', 'Acceptée'];
+const GOPI_ORDER_STATUSES = ['En attente', 'Paiement confirmé', 'Envoyé', 'Annulé'];
+const GOPI_PAYMENT_METHODS_API = ['MVola', 'Orange Money', 'Airtel Money', 'Virement Bancaire', 'Espèces', 'Chèque'];
+const GOPI_PRICE_MGA_API = 10000;
+const APPLICATION_FILE_MIME_API = {
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+};
+
+function normalizeApplicantFile(value, fileName) {
+  const safeName = cleanText(fileName, 120).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/\s+/g, '_').replace(/^\.+|\.+$/g, '');
+  const extension = /\.([^.]+)$/.exec(safeName)?.[1]?.toLowerCase();
+  const match = typeof value === 'string'
+    ? /^data:(application\/pdf|application\/msword|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document);base64,([a-z0-9+/=]+)$/i.exec(value)
+    : null;
+  if (!match || !extension || !APPLICATION_FILE_MIME_API[extension] || match[1].toLowerCase() !== APPLICATION_FILE_MIME_API[extension]) return null;
+  const bytes = Buffer.from(match[2], 'base64');
+  if (!bytes.length || bytes.length > 700 * 1024) return null;
+  const signatureValid = extension === 'pdf'
+    ? bytes.subarray(0, 5).toString('ascii') === '%PDF-'
+    : extension === 'doc'
+      ? Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]).equals(bytes.subarray(0, 8))
+      : bytes.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+  if (!signatureValid) return null;
+  return { value, fileName: safeName };
+}
+
+function normalizeJobApplicationSubmission(body) {
+  const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
+  const cv = normalizeApplicantFile(body?.cvUrl, body?.cvFileName);
+  const coverLetter = body?.coverLetterUrl ? normalizeApplicantFile(body.coverLetterUrl, body?.coverLetterFileName) : null;
+  const jobIdRaw = body?.jobId;
+  const jobId = jobIdRaw === undefined || jobIdRaw === null || jobIdRaw === '' ? null : Number(jobIdRaw);
+  const item = {
+    jobId,
+    firstName: cleanText(body?.firstName, 100).replace(/\s+/g, ' '),
+    lastName: cleanText(body?.lastName, 100).replace(/\s+/g, ' '),
+    email,
+    phone: cleanText(body?.phone, 50).replace(/\s+/g, ' '),
+    message: typeof body?.message === 'string' ? body.message.trim().slice(0, 3000) : '',
+    cv,
+    coverLetter,
+  };
+  if (jobId !== null && (!Number.isSafeInteger(jobId) || jobId < 1) || item.firstName.length < 1 || item.lastName.length < 1 || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || item.phone.replace(/\D/g, '').length < 7 || item.message.length > 3000 || !cv || body?.coverLetterUrl && !coverLetter) {
+    return { error: 'Application data is invalid' };
+  }
+  return { item };
+}
+
+function isGopiPdfValue(value) {
+  return typeof value === 'string' && (
+    /^data:application\/pdf;base64,[a-z0-9+/=]+$/i.test(value)
+    || /^https:\/\/.+\.pdf(?:[?#].*)?$/i.test(value)
+  );
+}
+
+function normalizeGopiOrderSubmission(body) {
+  const item = {
+    gopiId: Number(body?.gopiId),
+    customerName: cleanText(body?.customerName, 160).replace(/\s+/g, ' '),
+    customerEmail: typeof body?.customerEmail === 'string' ? body.customerEmail.trim().toLowerCase() : '',
+    customerPhone: cleanText(body?.customerPhone, 50).replace(/\s+/g, ' '),
+    paymentMethod: cleanText(body?.paymentMethod, 40),
+    transactionRef: cleanText(body?.transactionRef, 200).replace(/\s+/g, ' '),
+  };
+  if (!Number.isSafeInteger(item.gopiId) || item.gopiId < 1 || item.customerName.length < 2 || item.customerEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(item.customerEmail) || item.customerPhone.replace(/\D/g, '').length < 7 || !GOPI_PAYMENT_METHODS_API.includes(item.paymentMethod) || !['Espèces', 'Chèque'].includes(item.paymentMethod) && item.transactionRef.length < 3) {
+    return { error: 'GOPI order data is invalid' };
+  }
+  return { item };
+}
+
+function mapGopiOrder(row) {
+  const amount = row.amount_mga === null || row.amount_mga === undefined ? undefined : Number(row.amount_mga);
+  return {
+    id: Number(row.id),
+    ...(row.gopi_id === null || row.gopi_id === undefined ? {} : { gopiId: Number(row.gopi_id) }),
+    gopiTitle: row.gopi_title || '',
+    customerName: row.customer_name,
+    customerEmail: row.customer_email,
+    customerPhone: row.customer_phone,
+    date: row.order_date instanceof Date ? row.order_date.toISOString() : String(row.order_date),
+    ...(Number.isFinite(amount) ? { amountMGA: amount } : {}),
+    status: row.status,
+    ...(row.transaction_ref ? { transactionRef: row.transaction_ref } : {}),
+    ...(row.payment_method ? { paymentMethod: row.payment_method } : {}),
+    ...(row.payment_confirmed_at ? { paymentConfirmedAt: row.payment_confirmed_at instanceof Date ? row.payment_confirmed_at.toISOString() : String(row.payment_confirmed_at) } : {}),
+    ...(row.sent_at ? { sentAt: row.sent_at instanceof Date ? row.sent_at.toISOString() : String(row.sent_at) } : {}),
+  };
 }
 
 function eventCapacityFromPlaces(value) {
@@ -1122,6 +1269,214 @@ app.delete('/api/admin/registrations/:collection/:id', requireAuth, requireConte
   }
 });
 
+
+
+app.post('/api/public/job-applications', limitPublicRegistration, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const normalized = normalizeJobApplicationSubmission(request.body);
+  if (normalized.error) return response.status(400).json({ error: 'Vérifiez vos coordonnées et les fichiers PDF, DOC ou DOCX (700 Ko maximum par fichier).' });
+  const item = normalized.item;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    let jobTitle = null;
+    if (item.jobId !== null) {
+      const jobResult = await client.query(
+        `SELECT id, title, status, publish_date, deadline,
+                (publish_date <= CURRENT_DATE AND (deadline IS NULL OR deadline >= CURRENT_DATE)) AS in_date_range
+         FROM jobs WHERE id = $1 FOR UPDATE`,
+        [item.jobId],
+      );
+      if (!jobResult.rows.length || jobResult.rows[0].status !== 'Ouvert' || !jobResult.rows[0].in_date_range) {
+        await client.query('ROLLBACK');
+        return response.status(409).json({ error: 'Cette offre n’est plus ouverte. Vous pouvez envoyer une candidature spontanée.' });
+      }
+      jobTitle = jobResult.rows[0].title;
+    }
+    const inserted = await client.query(
+      `INSERT INTO job_applications
+       (job_id, job_title, first_name, last_name, email, phone, message, cv_url, cv_file_name, cover_letter_url, cover_letter_file_name, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'Nouvelle')
+       RETURNING id, application_date`,
+      [item.jobId, jobTitle, item.firstName, item.lastName, item.email, item.phone, item.message || null, item.cv.value, item.cv.fileName, item.coverLetter?.value || null, item.coverLetter?.fileName || null],
+    );
+    await client.query('COMMIT');
+    return response.status(201).json({ ok: true, id: Number(inserted.rows[0].id) });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (error?.code === '23503') return response.status(409).json({ error: 'L’offre concernée n’est plus disponible.' });
+    console.error('OMAPI public job application failed');
+    return response.status(503).json({ error: 'Le service de candidature est momentanément indisponible.' });
+  } finally {
+    client.release();
+  }
+});
+
+app.get('/api/admin/job-applications', requireAuth, requireContentManager, async (_request, response) => {
+  response.set('Cache-Control', 'no-store');
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, job_id, job_title, first_name, last_name, email, phone, message,
+              cv_url, cv_file_name, cover_letter_url, cover_letter_file_name,
+              application_date, status
+       FROM job_applications ORDER BY application_date DESC, id DESC`,
+    );
+    return response.json({ items: rows.map((row) => ({
+      id: Number(row.id),
+      ...(row.job_id === null ? {} : { jobId: Number(row.job_id) }),
+      ...(row.job_title ? { jobTitle: row.job_title } : {}),
+      firstName: row.first_name,
+      lastName: row.last_name,
+      email: row.email,
+      phone: row.phone,
+      ...(row.message ? { message: row.message } : {}),
+      cvUrl: row.cv_url,
+      ...(row.cv_file_name ? { cvFileName: row.cv_file_name } : {}),
+      ...(row.cover_letter_url ? { coverLetterUrl: row.cover_letter_url } : {}),
+      ...(row.cover_letter_file_name ? { coverLetterFileName: row.cover_letter_file_name } : {}),
+      applicationDate: row.application_date instanceof Date ? row.application_date.toISOString() : String(row.application_date),
+      status: row.status,
+    })) });
+  } catch {
+    console.error('OMAPI admin job applications read failed');
+    return response.status(503).json({ error: 'Le service des candidatures est momentanément indisponible.' });
+  }
+});
+
+app.patch('/api/admin/job-applications/:id', requireAuth, requireContentManager, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const id = validateEditorialId(request.params.id);
+  const status = cleanText(request.body?.status, 20);
+  if (!id) return response.status(400).json({ error: 'Application id is invalid' });
+  if (!JOB_APPLICATION_STATUSES.includes(status)) return response.status(400).json({ error: 'Sélectionnez un statut de candidature valide.' });
+  try {
+    const { rows } = await pool.query('UPDATE job_applications SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING id, status', [status, id]);
+    if (!rows.length) return response.status(404).json({ error: 'Cette candidature n’existe plus.' });
+    return response.json({ id: Number(rows[0].id), status: rows[0].status });
+  } catch {
+    console.error('OMAPI job application status update failed');
+    return response.status(503).json({ error: 'Le statut de la candidature n’a pas pu être enregistré.' });
+  }
+});
+
+app.delete('/api/admin/job-applications/:id', requireAuth, requireContentManager, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const id = validateEditorialId(request.params.id);
+  if (!id) return response.status(400).json({ error: 'Application id is invalid' });
+  try {
+    const result = await pool.query('DELETE FROM job_applications WHERE id = $1', [id]);
+    if (!result.rowCount) return response.status(404).json({ error: 'Cette candidature n’existe plus.' });
+    return response.json({ ok: true, id });
+  } catch {
+    console.error('OMAPI job application delete failed');
+    return response.status(503).json({ error: 'La candidature n’a pas pu être supprimée.' });
+  }
+});
+
+app.post('/api/public/gopi-orders', limitPublicRegistration, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const normalized = normalizeGopiOrderSubmission(request.body);
+  if (normalized.error) return response.status(400).json({ error: 'Vérifiez vos coordonnées et les informations de paiement.' });
+  const item = normalized.item;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const publicationResult = await client.query('SELECT id, title, file_url FROM gopi_items WHERE id = $1 FOR UPDATE', [item.gopiId]);
+    if (!publicationResult.rows.length || !isGopiPdfValue(publicationResult.rows[0].file_url)) {
+      await client.query('ROLLBACK');
+      return response.status(409).json({ error: 'Cette publication GOPI n’est plus disponible à la commande.' });
+    }
+    const publication = publicationResult.rows[0];
+    const inserted = await client.query(
+      `INSERT INTO gopi_orders (gopi_id, gopi_title, customer_name, customer_email, customer_phone, amount_mga, status, transaction_ref, payment_method)
+       VALUES ($1, $2, $3, $4, $5, $6, 'En attente', $7, $8)
+       RETURNING id`,
+      [item.gopiId, publication.title, item.customerName, item.customerEmail, item.customerPhone, GOPI_PRICE_MGA_API, item.transactionRef || null, item.paymentMethod],
+    );
+    await client.query('COMMIT');
+    return response.status(201).json({ ok: true, id: Number(inserted.rows[0].id) });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (error?.code === '23503') return response.status(409).json({ error: 'Cette publication GOPI n’est plus disponible.' });
+    console.error('OMAPI public GOPI order failed');
+    return response.status(503).json({ error: 'Le service de commande GOPI est momentanément indisponible.' });
+  } finally {
+    client.release();
+  }
+});
+
+app.get('/api/admin/gopi/orders', requireAuth, requireContentManager, async (_request, response) => {
+  response.set('Cache-Control', 'no-store');
+  try {
+    const { rows } = await pool.query('SELECT id, gopi_id, gopi_title, customer_name, customer_email, customer_phone, order_date, amount_mga, status, transaction_ref, payment_method, payment_confirmed_at, sent_at FROM gopi_orders ORDER BY order_date DESC, id DESC');
+    return response.json({ items: rows.map(mapGopiOrder) });
+  } catch {
+    console.error('OMAPI admin GOPI orders read failed');
+    return response.status(503).json({ error: 'Le service des commandes GOPI est momentanément indisponible.' });
+  }
+});
+
+app.patch('/api/admin/gopi/orders/:id', requireAuth, requireContentManager, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const id = validateEditorialId(request.params.id);
+  const nextStatus = cleanText(request.body?.status, 30);
+  if (!id) return response.status(400).json({ error: 'Order id is invalid' });
+  if (!GOPI_ORDER_STATUSES.includes(nextStatus)) return response.status(400).json({ error: 'Sélectionnez un statut de commande reconnu.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const currentResult = await client.query('SELECT id, status, transaction_ref, payment_method FROM gopi_orders WHERE id = $1 FOR UPDATE', [id]);
+    if (!currentResult.rows.length) {
+      await client.query('ROLLBACK');
+      return response.status(404).json({ error: 'Cette commande n’existe plus.' });
+    }
+    const current = currentResult.rows[0];
+    const allowed = current.status === 'En attente'
+      ? ['Paiement confirmé', 'Annulé'].includes(nextStatus)
+      : current.status === 'Paiement confirmé' && nextStatus === 'Envoyé';
+    if (!allowed) {
+      await client.query('ROLLBACK');
+      return response.status(409).json({ error: `Transition refusée : une commande « ${current.status} » ne peut pas devenir « ${nextStatus} ».` });
+    }
+    let result;
+    if (nextStatus === 'Paiement confirmé') {
+      const paymentMethod = cleanText(request.body?.paymentMethod, 40);
+      const transactionRef = cleanText(request.body?.transactionRef, 200).replace(/\s+/g, ' ');
+      if (!GOPI_PAYMENT_METHODS_API.includes(paymentMethod) || !['Espèces', 'Chèque'].includes(paymentMethod) && transactionRef.length < 3) {
+        await client.query('ROLLBACK');
+        return response.status(400).json({ error: 'Moyen de paiement ou référence invalide.' });
+      }
+      result = await client.query('UPDATE gopi_orders SET status = $1, payment_method = $2, transaction_ref = $3, payment_confirmed_at = NOW(), updated_at = NOW() WHERE id = $4 RETURNING id, gopi_id, gopi_title, customer_name, customer_email, customer_phone, order_date, amount_mga, status, transaction_ref, payment_method, payment_confirmed_at, sent_at', [nextStatus, paymentMethod, transactionRef || null, id]);
+    } else if (nextStatus === 'Envoyé') {
+      result = await client.query('UPDATE gopi_orders SET status = $1, sent_at = NOW(), updated_at = NOW() WHERE id = $2 RETURNING id, gopi_id, gopi_title, customer_name, customer_email, customer_phone, order_date, amount_mga, status, transaction_ref, payment_method, payment_confirmed_at, sent_at', [nextStatus, id]);
+    } else {
+      result = await client.query('UPDATE gopi_orders SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING id, gopi_id, gopi_title, customer_name, customer_email, customer_phone, order_date, amount_mga, status, transaction_ref, payment_method, payment_confirmed_at, sent_at', [nextStatus, id]);
+    }
+    await client.query('COMMIT');
+    return response.json({ item: mapGopiOrder(result.rows[0]) });
+  } catch {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('OMAPI GOPI order update failed');
+    return response.status(503).json({ error: 'La commande GOPI n’a pas été mise à jour.' });
+  } finally {
+    client.release();
+  }
+});
+
+app.delete('/api/admin/gopi/orders/:id', requireAuth, requireContentManager, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const id = validateEditorialId(request.params.id);
+  if (!id) return response.status(400).json({ error: 'Order id is invalid' });
+  try {
+    const result = await pool.query('DELETE FROM gopi_orders WHERE id = $1', [id]);
+    if (!result.rowCount) return response.status(404).json({ error: 'Cette commande n’existe plus.' });
+    return response.json({ ok: true, id });
+  } catch {
+    console.error('OMAPI GOPI order delete failed');
+    return response.status(503).json({ error: 'La commande GOPI n’a pas pu être supprimée.' });
+  }
+});
+
 app.get('/api/admin/programs/:collection', requireAuth, requireContentManager, async (request, response) => {
   response.set('Cache-Control', 'no-store');
   const config = programmeTable(request.params.collection);
@@ -1177,8 +1532,12 @@ app.delete('/api/admin/programs/:collection/:id', requireAuth, requireContentMan
   const id = validateEditorialId(request.params.id);
   if (!config) return response.status(404).json({ error: 'Program collection not found' });
   if (!id) return response.status(400).json({ error: 'Program id is invalid' });
-  const registrationsTable = kind === 'events' ? 'event_registrations' : 'formation_registrations';
-  const foreignKey = kind === 'events' ? 'event_id' : 'formation_id';
+  const related = {
+    events: { table: 'event_registrations', foreignKey: 'event_id' },
+    formations: { table: 'formation_registrations', foreignKey: 'formation_id' },
+    jobs: { table: 'job_applications', foreignKey: 'job_id' },
+    gopi: { table: 'gopi_orders', foreignKey: 'gopi_id' },
+  }[kind];
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -1187,10 +1546,18 @@ app.delete('/api/admin/programs/:collection/:id', requireAuth, requireContentMan
       await client.query('ROLLBACK');
       return response.status(404).json({ error: 'Program item not found' });
     }
-    const count = await client.query(`SELECT COUNT(*)::int AS count FROM ${registrationsTable} WHERE ${foreignKey} = $1`, [id]);
-    if (Number(count.rows[0]?.count || 0) > 0) {
-      await client.query('ROLLBACK');
-      return response.status(409).json({ error: 'Cet élément possède encore des inscriptions; supprimez-les avant de supprimer le catalogue.' });
+    if (related) {
+      const pendingFilter = kind === 'gopi' ? " AND status IN ('En attente', 'Paiement confirmé')" : '';
+      const count = await client.query(`SELECT COUNT(*)::int AS count FROM ${related.table} WHERE ${related.foreignKey} = $1${pendingFilter}`, [id]);
+      if (Number(count.rows[0]?.count || 0) > 0) {
+        await client.query('ROLLBACK');
+        const message = kind === 'jobs'
+          ? 'Cette offre est liée à des candidatures; fermez-la plutôt afin de préserver les dossiers.'
+          : kind === 'gopi'
+            ? 'Cette publication possède des commandes encore à traiter.'
+            : 'Cet élément possède encore des inscriptions; supprimez-les avant de supprimer le catalogue.';
+        return response.status(409).json({ error: message });
+      }
     }
     await client.query(`DELETE FROM ${config.table} WHERE id = $1`, [id]);
     await client.query('COMMIT');

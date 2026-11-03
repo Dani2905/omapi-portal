@@ -1,0 +1,16 @@
+Raccordement Emplois/Candidatures et GOPI/Commandes
+
+1. Droits PostgreSQL
+- Dans phpPgAdmin, sélectionnez `ciprabem_omapi_portal`.
+- Ouvrez « SQL » en haut à droite, collez `backend/schema/grant_jobs_gopi_permissions.sql`, puis cliquez « Lancer ».
+- Les quatre tables existent déjà; le script accorde seulement les privilèges au rôle `ciprabem_omapi_api` et à leurs séquences. Aucune table ni donnée n’est créée, modifiée ou importée.
+
+2. API cPanel
+- Déployez `backend/app.js` dans l’application Node OMAPI et redémarrez-la depuis cPanel.
+- Ne modifiez pas l’application ou la base du Cabinet.
+
+3. Portail web
+- Appliquez les fichiers de l’archive au dépôt OMAPI, vérifiez le diff dans GitHub Desktop, puis publiez le site.
+- Après lecture API réussie, seules ces anciennes clés de démonstration sont supprimées : `omapi_jobs`, `omapi_job_applications`, `omapi_gopi`, `omapi_gopi_orders`. Aucune donnée locale n’est importée.
+
+Les offres et publications sont lisibles publiquement. L’envoi d’une candidature ou d’une commande est public, mais les dossiers nominatifs, pièces jointes et commandes ne sont consultables et modifiables que par Admin/Éditeur authentifié. Le montant GOPI et le statut initial « En attente » sont déterminés côté serveur; aucune transaction bancaire ni aucun envoi de document/e-mail n’est automatisé.
