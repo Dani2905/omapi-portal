@@ -592,6 +592,63 @@ function requireContentManager(request, response, next) {
   return next();
 }
 
+function activityEntityForAdminPath(path) {
+  const parts = path.split('/').filter(Boolean);
+  if (parts[0] === 'api' && parts[1] === 'auth' && parts[2] === 'profile') {
+    return { key: 'omapi_users', label: 'profile' };
+  }
+  if (parts[0] !== 'api' || parts[1] !== 'admin') return null;
+  if (parts[2] === 'activity-logs' || parts[2] === 'notification-reads') return null;
+  if (parts[2] === 'programs' && ['events', 'formations', 'jobs', 'gopi'].includes(parts[3])) {
+    return { key: `omapi_${parts[3]}`, label: parts[3] };
+  }
+  if (parts[2] === 'library' && ['forms', 'guides', 'legislation'].includes(parts[3])) {
+    return { key: `omapi_${parts[3]}`, label: parts[3] };
+  }
+  if (parts[2] === 'editorial' && ['news', 'slides', 'announcements'].includes(parts[3])) {
+    return { key: `omapi_${parts[3]}`, label: parts[3] };
+  }
+  if (parts[2] === 'registrations' && ['events', 'formations'].includes(parts[3])) {
+    return { key: parts[3] === 'events' ? 'omapi_event_registrations' : 'omapi_formation_registrations', label: `${parts[3]} registrations` };
+  }
+  if (parts[2] === 'job-applications') return { key: 'omapi_job_applications', label: 'job applications' };
+  if (parts[2] === 'gopi' && parts[3] === 'orders') return { key: 'omapi_gopi_orders', label: 'GOPI orders' };
+  if (parts[2] === 'users') return { key: 'omapi_users', label: 'users' };
+  if (parts[2] === 'settings' && ['site_config', 'home_resources'].includes(parts[3])) {
+    return { key: parts[3] === 'site_config' ? 'omapi_site_config' : 'omapi_home_resources', label: 'site settings' };
+  }
+  return null;
+}
+
+app.use((request, response, next) => {
+  const method = request.method.toUpperCase();
+  const entity = ['POST', 'PATCH', 'PUT', 'DELETE'].includes(method) ? activityEntityForAdminPath(request.path) : null;
+  if (!entity) return next();
+  const originalJson = response.json.bind(response);
+  response.json = (body) => {
+    response.locals.activityResponseBody = body;
+    return originalJson(body);
+  };
+  response.on('finish', () => {
+    if (response.statusCode < 200 || response.statusCode >= 300 || !request.auth?.user?.id) return;
+    const body = response.locals.activityResponseBody;
+    const pathId = request.path.split('/').filter(Boolean).at(-1);
+    const responseId = body?.item?.id ?? body?.user?.id ?? body?.id ?? body?.item?.key ?? body?.key;
+    const entityId = responseId ?? (/^\d+$/.test(pathId || '') ? pathId : undefined);
+    const verb = method === 'POST' ? 'ajouté' : method === 'DELETE' ? 'supprimé' : 'mis à jour';
+    const action = method === 'POST' ? 'Ajout effectué' : method === 'DELETE' ? 'Suppression effectuée' : 'Mise à jour effectuée';
+    const details = entityId === undefined
+      ? `Élément ${verb} dans ${entity.label}.`
+      : `Élément ${verb} (ID: ${String(entityId).slice(0, 120)}) dans ${entity.label}.`;
+    pool.query(
+      `INSERT INTO activity_logs (user_id, user_name, entity_key, entity_id, action, details)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [request.auth.user.id, String(request.auth.user.name || 'Administration').slice(0, 200), entity.key, entityId === undefined ? null : String(entityId), action, details],
+    ).catch(() => console.error('OMAPI activity log write failed'));
+  });
+  return next();
+});
+
 app.get('/', (_request, response) => {
   response.json({ service: 'OMAPI API', status: 'running' });
 });
@@ -1474,6 +1531,71 @@ app.delete('/api/admin/gopi/orders/:id', requireAuth, requireContentManager, asy
   } catch {
     console.error('OMAPI GOPI order delete failed');
     return response.status(503).json({ error: 'La commande GOPI n’a pas pu être supprimée.' });
+  }
+});
+
+
+
+app.get('/api/admin/activity-logs', requireAuth, requireContentManager, async (_request, response) => {
+  response.set('Cache-Control', 'no-store');
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, user_id, user_name, entity_key, entity_id, action, details, occurred_at
+       FROM activity_logs ORDER BY occurred_at DESC, id DESC LIMIT 300`,
+    );
+    return response.json({ items: rows.map((row) => ({
+      id: Number(row.id),
+      ...(row.user_id === null ? {} : { userId: String(row.user_id) }),
+      userName: row.user_name || 'Visiteur',
+      ...(row.entity_key ? { entityKey: row.entity_key } : {}),
+      ...(row.entity_id === null ? {} : { entityId: row.entity_id }),
+      action: row.action,
+      details: row.details,
+      timestamp: row.occurred_at instanceof Date ? row.occurred_at.toISOString() : String(row.occurred_at),
+    })) });
+  } catch {
+    console.error('OMAPI activity log read failed');
+    return response.status(503).json({ error: 'Le journal d’activité est momentanément indisponible.' });
+  }
+});
+
+app.get('/api/admin/notification-reads', requireAuth, requireContentManager, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  try {
+    const { rows } = await pool.query('SELECT notification_id FROM notification_reads WHERE user_id = $1', [request.auth.user.id]);
+    return response.json({ ids: rows.map((row) => row.notification_id) });
+  } catch {
+    console.error('OMAPI notification reads read failed');
+    return response.status(503).json({ error: 'L’état des notifications est momentanément indisponible.' });
+  }
+});
+
+app.put('/api/admin/notification-reads', requireAuth, requireContentManager, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  const rawIds = request.body?.ids;
+  if (!Array.isArray(rawIds) || rawIds.length > 100 || rawIds.some((id) => typeof id !== 'string' || id.length > 180 || !/^[a-z][a-z0-9-]{0,20}-[a-zA-Z0-9._:-]{1,150}$/.test(id))) {
+    return response.status(400).json({ error: 'La liste des notifications lues est invalide.' });
+  }
+  const ids = [...new Set(rawIds)];
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM notification_reads WHERE user_id = $1', [request.auth.user.id]);
+    if (ids.length) {
+      await client.query(
+        `INSERT INTO notification_reads (user_id, notification_id)
+         SELECT $1, input.notification_id FROM unnest($2::text[]) AS input(notification_id)`,
+        [request.auth.user.id, ids],
+      );
+    }
+    await client.query('COMMIT');
+    return response.json({ ids });
+  } catch {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('OMAPI notification reads save failed');
+    return response.status(503).json({ error: 'L’état des notifications n’a pas pu être enregistré.' });
+  } finally {
+    client.release();
   }
 });
 

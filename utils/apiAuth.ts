@@ -40,5 +40,13 @@ export async function apiRequest(
 ): Promise<Response> {
   const headers = new Headers(init.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  return fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  const method = String(init.method || 'GET').toUpperCase();
+  const isApiWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+  const isLogMaintenance = path.startsWith('/api/admin/activity-logs') || path.startsWith('/api/admin/notification-reads');
+  const isAuthenticatedAdminWrite = path.startsWith('/api/admin/') || path === '/api/auth/profile';
+  if (response.ok && isApiWrite && isAuthenticatedAdminWrite && !isLogMaintenance && typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('omapi-api-activity-written'));
+  }
+  return response;
 }

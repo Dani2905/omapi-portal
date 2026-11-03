@@ -1,0 +1,15 @@
+Raccordement du journal d’activité et des notifications lues
+
+1. Schéma et droits PostgreSQL
+- Dans phpPgAdmin, sélectionnez `ciprabem_omapi_portal`.
+- Ouvrez « SQL » en haut à droite, collez tout le contenu de `backend/schema/create_activity_notifications.sql`, puis cliquez « Lancer ».
+- Le script crée la table vide `notification_reads`, accorde à `ciprabem_omapi_api` la lecture/écriture nécessaire sur le journal et la table d’état. Aucun ancien journal ou état local n’est importé.
+
+2. API cPanel
+- Déployez `backend/app.js` dans l’application Node OMAPI et redémarrez-la depuis cPanel.
+- Ne modifiez pas l’application ni la base du Cabinet.
+
+3. Portail
+- Appliquez les fichiers de l’archive au dépôt OMAPI, vérifiez les changements dans GitHub Desktop, puis publiez le site.
+- Après lecture API réussie, seules les clés obsolètes `omapi_activities` et `omapi_read_notifications` sont supprimées du navigateur.
+- Le journal est partagé entre les comptes Admin/Éditeur; l’état lu/non lu est sauvegardé séparément pour chaque compte.

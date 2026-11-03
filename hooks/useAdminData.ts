@@ -1,30 +1,17 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useCrud } from './useCrud';
 import { useApiEditorial } from './useApiEditorial';
 import { useApiLibrary } from './useApiLibrary';
 import { useApiSiteSettings } from './useApiSiteSettings';
 import { useApiProgrammes } from './useApiProgrammes';
 import { useApiRemainingModules } from './useApiRemainingModules';
+import { useApiActivity } from './useApiActivity';
 import { describeCrudAction } from '../utils/notificationMessages';
 import { normalizeAnnouncementDraft, validateAnnouncementText } from '../utils/announcementLogic';
 import { normalizeNewsDraft, validateNewsDraft } from '../utils/editorialLogic';
 
 
 import { Slide, NewsItem, Announcement, Formation, FormationRegistration, JobOffer, JobApplication, GopiItem, Event, Notification, SystemNotification, ActivityLog } from '../types';
-
-const READ_NOTIFICATIONS_KEY = 'omapi_read_notifications';
-
-const readNotificationIds = (): string[] => {
-  try {
-    const saved = localStorage.getItem(READ_NOTIFICATIONS_KEY);
-    if (!saved) return [];
-    const parsed: unknown = JSON.parse(saved);
-    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
-  } catch {
-    return [];
-  }
-};
 
 const getNotificationSortValue = (id: number | string, date?: string): number => {
   const parsedDate = date ? new Date(date).getTime() : Number.NaN;
@@ -98,7 +85,7 @@ export const useAdminData = () => {
   // 5. Formations et événements : catalogues publics, opérations d’administration
   // authentifiées et inscriptions conservées privées côté API.
   const programmes = useApiProgrammes(addNotification, 'all', true);
-  const { formations, formationRegistrations, events, eventRegistrations } = programmes;
+  const { formations, formationRegistrations, events, eventRegistrations, loading: programmesLoading } = programmes;
   const saveFormation = async (draft: Partial<Formation>): Promise<boolean> => Boolean(await programmes.saveFormation(draft));
   const saveFormationRegistration = programmes.saveFormationRegistration;
   const deleteFormationRegistration = programmes.deleteFormationRegistration;
@@ -115,7 +102,7 @@ export const useAdminData = () => {
   // 6. GOPI & commandes : catalogue public, données clients et actions de gestion
   // accessibles uniquement via les routes authentifiées de l’API.
   const commerce = useApiRemainingModules(addNotification, 'all', true);
-  const { gopiItems, gopiOrders, jobs, jobApplications } = commerce;
+  const { gopiItems, gopiOrders, jobs, jobApplications, loading: commerceLoading } = commerce;
   const saveGopi = async (draft: Partial<GopiItem>): Promise<boolean> => Boolean(await commerce.saveGopi(draft));
   const deleteGopi = async (id: number): Promise<boolean | string> => {
     const publication = gopiItems.find((item) => String(item.id) === String(id));
@@ -181,24 +168,15 @@ export const useAdminData = () => {
 
   const handleDeleteNews = (id: number) => editorial.deleteNews(id);
 
-  // 13. System Activity Logs
-  const { items: activityLogs } = useCrud<ActivityLog>('omapi_activities', [], () => {});
+  // 13. Journal d’activité et état lu/non lu : lecture/sauvegarde API, par compte.
+  const activityApi = useApiActivity(addNotification);
+  const { activityLogs, readNotificationIds: readNotifIds, saveReadNotificationIds, loading: activityLoading } = activityApi;
 
-  // --- Notifications persistantes (cloche) : commandes, inscriptions et actions réelles ---
+  // --- Notifications persistantes (cloche), données privées admin uniquement ---
   const [systemNotifications, setSystemNotifications] = useState<SystemNotification[]>([]);
-  const [readNotifIds, setReadNotifIds] = useState<string[]>(readNotificationIds);
 
   useEffect(() => {
-    const syncReadNotifications = (event: StorageEvent) => {
-      if (event.key === READ_NOTIFICATIONS_KEY) {
-        setReadNotifIds(readNotificationIds());
-      }
-    };
-    window.addEventListener('storage', syncReadNotifications);
-    return () => window.removeEventListener('storage', syncReadNotifications);
-  }, []);
-
-  useEffect(() => {
+    if (activityLoading || programmesLoading || commerceLoading) return;
     const candidates: Array<{ notification: SystemNotification; sortValue: number }> = [];
 
     // Les commandes réellement en attente, des plus récentes aux plus anciennes.
@@ -236,6 +214,43 @@ export const useAdminData = () => {
             title: 'Nouvelle inscription à une formation',
             message: `${registration.name} s’est inscrit à une formation. Consultez ses coordonnées et confirmez la prise en charge.`,
             time: registration.registrationDate,
+            read: readNotifIds.includes(id),
+            type: 'info',
+          },
+        });
+      });
+
+    [...eventRegistrations]
+      .sort((a, b) => getNotificationSortValue(b.id, b.registrationDate) - getNotificationSortValue(a.id, a.registrationDate))
+      .slice(0, 5)
+      .forEach((registration) => {
+        const id = `event-${registration.id}`;
+        const event = events.find((item) => String(item.id) === String(registration.eventId));
+        candidates.push({
+          sortValue: getNotificationSortValue(registration.id, registration.registrationDate),
+          notification: {
+            id,
+            title: 'Nouvelle inscription à un événement',
+            message: `${registration.name} s’est inscrit${event ? ` à « ${event.title} »` : ' à un événement'}. Consultez ses coordonnées dans le tableau de bord.`,
+            time: registration.registrationDate,
+            read: readNotifIds.includes(id),
+            type: 'info',
+          },
+        });
+      });
+
+    [...jobApplications]
+      .sort((a, b) => getNotificationSortValue(b.id, b.applicationDate) - getNotificationSortValue(a.id, a.applicationDate))
+      .slice(0, 5)
+      .forEach((application) => {
+        const id = `job-${application.id}`;
+        candidates.push({
+          sortValue: getNotificationSortValue(application.id, application.applicationDate),
+          notification: {
+            id,
+            title: 'Nouvelle candidature reçue',
+            message: `${application.firstName} ${application.lastName} a envoyé une candidature${application.jobTitle ? ` pour « ${application.jobTitle} »` : ' spontanée'}.`,
+            time: application.applicationDate,
             read: readNotifIds.includes(id),
             type: 'info',
           },
@@ -310,43 +325,24 @@ export const useAdminData = () => {
 
     candidates.sort((a, b) => b.sortValue - a.sortValue);
     const visible = candidates.slice(0, 40).map((candidate) => candidate.notification);
-    const visibleIds = new Set(visible.map((notification) => notification.id));
-    const validReadIds = readNotifIds.filter((id) => visibleIds.has(id));
-
-    if (validReadIds.length !== readNotifIds.length) {
-      setReadNotifIds(validReadIds);
-      try {
-        localStorage.setItem(READ_NOTIFICATIONS_KEY, JSON.stringify(validReadIds));
-      } catch (error) {
-        console.error('Impossible de nettoyer les notifications lues :', error);
-      }
-    }
-
-    const validReadSet = new Set(validReadIds);
+    const readSet = new Set(readNotifIds);
     setSystemNotifications(visible.map((notification) => ({
       ...notification,
-      read: validReadSet.has(notification.id),
+      read: readSet.has(notification.id),
     })));
   }, [
-    announcements, activityLogs, formationRegistrations, formations, gopiItems,
-    gopiOrders, guides, forms, jobApplications, jobs, legislationItems,
-    newsItems, readNotifIds, slides, events, eventRegistrations,
+    announcements, activityLogs, activityLoading, commerceLoading, programmesLoading,
+    formationRegistrations, formations, gopiItems, gopiOrders, guides, forms,
+    jobApplications, jobs, legislationItems, newsItems, readNotifIds, slides,
+    events, eventRegistrations,
   ]);
 
-  const persistReadNotificationIds = (ids: string[]) => {
-    try {
-      localStorage.setItem(READ_NOTIFICATIONS_KEY, JSON.stringify(ids));
-      setReadNotifIds(ids);
-    } catch (error) {
-      console.error('Impossible d’enregistrer les notifications lues :', error);
-      addNotification('Impossible d’enregistrer votre lecture des notifications dans ce navigateur. Vérifiez son espace de stockage puis réessayez.', 'error');
-    }
-  };
+  const persistReadNotificationIds = async (ids: string[]) => saveReadNotificationIds(ids);
 
   const markNotificationAsRead = (id: string) => {
     if (!systemNotifications.some((notification) => notification.id === id)) return;
     if (readNotifIds.includes(id)) return;
-    persistReadNotificationIds([...readNotifIds, id]);
+    void persistReadNotificationIds([...readNotifIds, id]);
   };
 
   const markAllNotificationsAsRead = () => {
@@ -354,7 +350,7 @@ export const useAdminData = () => {
       ...readNotifIds,
       ...systemNotifications.map((notification) => notification.id),
     ])];
-    if (nextReadIds.length !== readNotifIds.length) persistReadNotificationIds(nextReadIds);
+    if (nextReadIds.length !== readNotifIds.length) void persistReadNotificationIds(nextReadIds);
   };
 
   return {
