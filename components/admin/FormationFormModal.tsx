@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Formation } from '../../types';
 import { XMarkIcon, AcademicCapIcon, FolderIcon, ClockIcon, MapPinIcon, CalendarIcon, DocumentTextIcon, ExclamationCircleIcon, SwatchIcon, ArrowUpTrayIcon } from './AdminIcons';
-import { isSupportedFormationDocument, MAX_FORMATION_DOCUMENT_BYTES, normalizeFormationDraft, validateFormationDraft } from '../../utils/formationLogic';
+import { formatFormationDateForInput, isSupportedFormationDocument, MAX_FORMATION_DOCUMENT_BYTES, normalizeFormationDraft, validateFormationDraft } from '../../utils/formationLogic';
 
 interface FormationFormModalProps {
   isOpen: boolean;
@@ -197,7 +197,7 @@ const FormationFormModal: React.FC<FormationFormModalProps> = ({ isOpen, onClose
                             <input 
                                 type="text" 
                                 className="w-full pl-10 px-3 py-2 border border-slate-200 text-sm focus:border-slate-900 outline-none text-slate-700 bg-slate-50/50"
-                                value={formData.date || ''}
+                                value={formatFormationDateForInput(formData.date)}
                                 maxLength={80}
                                 onChange={(e) => setFormData((previous) => ({ ...previous, date: e.target.value }))}
                                 placeholder="JJ/MM/AAAA, ex. 20/11/2026"

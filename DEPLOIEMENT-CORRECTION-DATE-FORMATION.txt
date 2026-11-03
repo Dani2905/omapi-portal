@@ -1,15 +1,17 @@
-Correction de l’enregistrement des formations
+Correction du parcours des dates Formation
 
-Cause : le formulaire acceptait des dates telles que 20/11/2026 alors que l’API n’acceptait que le format ISO (2026-11-20). La date est maintenant normalisée au format ISO avant envoi. Le serveur accepte aussi les dates numériques françaises, et les dates impossibles sont refusées avec un message explicite.
+La saisie de dates françaises comme 20/11/2026 est normalisée en 2026-11-20 avant envoi. L’API accepte aussi les formats numériques français lorsqu’elle est appelée directement et refuse les dates calendaires impossibles. Sur la page publique, les dates ISO sont affichées en français (par exemple « 20 novembre 2026 »), sans décalage de fuseau horaire. En modification, une date déjà enregistrée en ISO est présentée en JJ/MM/AAAA.
 
-Fichiers inclus dans la mise à jour :
+Fichiers inclus :
+- backend/app.js
 - components/admin/FormationFormModal.tsx
+- pages/Formations.tsx
 - utils/formationLogic.ts
 - tests/formations.test.ts
-- backend/app.js
 
 Publication :
-1. Dans le clone OMAPI de GitHub Desktop, remplacer ces fichiers par ceux de l’archive, puis vérifier et publier les changements.
-2. Pour que la création fonctionne côté serveur, copier aussi backend/app.js dans le dossier racine de l’application Node OMAPI sur cPanel, remplacer app.js, puis redémarrer l’application. Le push GitHub/Netlify seul ne met pas à jour l’API cPanel.
-3. Aucune migration SQL n’est nécessaire.
-4. Tester avec la date 20/11/2026 : elle doit être envoyée à l’API comme 2026-11-20 et la formation doit être enregistrée.
+1. Avant de copier dans votre clone GitHub Desktop, synchronisez-le et vérifiez ses changements locaux. Ne remplacez pas de fichier modifié localement sans comparer : appliquez uniquement les changements Formation listés ci-dessus.
+2. Publiez les changements frontend via GitHub Desktop.
+3. Pour appliquer la normalisation aux appels directs de l’API, copiez aussi backend/app.js dans le dossier racine de l’application Node OMAPI sur cPanel, puis redémarrez cette application. GitHub/Netlify ne met pas automatiquement à jour l’API cPanel.
+4. Aucune migration SQL n’est nécessaire.
+5. Testez la date 20/11/2026 : elle doit être enregistrée comme 2026-11-20 et affichée comme « 20 novembre 2026 ».

@@ -65,6 +65,25 @@ export function normalizeFormationDate(value: string | undefined): string {
   return input;
 }
 
+export function formatFormationDate(value: string | undefined): string {
+  const normalized = normalizeFormationDate(value);
+  if (!isValidIsoDate(normalized)) return (value ?? '').trim();
+  const [year, month, day] = normalized.split('-').map(Number);
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(year, month - 1, day)));
+}
+
+export function formatFormationDateForInput(value: string | undefined): string {
+  const normalized = normalizeFormationDate(value);
+  if (!isValidIsoDate(normalized)) return (value ?? '').trim();
+  const [year, month, day] = normalized.split('-');
+  return `${day}/${month}/${year}`;
+}
+
 export function normalizeFormationDraft(draft: Partial<Formation>): Partial<Formation> {
   return {
     ...draft,

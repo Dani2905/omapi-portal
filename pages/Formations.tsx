@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
 import { Formation } from '../types';
 import { useApiProgrammes } from '../hooks/useApiProgrammes';
-import { normalizeFormationRegistration, validateFormationRegistration } from '../utils/formationLogic';
+import { formatFormationDate, normalizeFormationRegistration, validateFormationRegistration } from '../utils/formationLogic';
 
 // --- Heroicons ---
 const AcademicCapIcon = ({ className }: { className?: string }) => (
@@ -196,7 +196,7 @@ const Formations: React.FC = () => {
                 <div className="space-y-3 mb-6">
                     <div className="flex items-center text-sm text-gray-600">
                         <CalendarDaysIcon className="w-5 h-5 mr-3 text-gray-400" />
-                        <span>{formation.date || 'Date à définir'}</span>
+                        <span>{formation.date ? formatFormationDate(formation.date) : 'Date à définir'}</span>
                     </div>
                     <div className="flex items-center text-sm text-gray-600">
                         <ClockIcon className="w-5 h-5 mr-3 text-gray-400" />

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import type { Formation, FormationRegistration } from '../types';
 import {
+  formatFormationDate,
+  formatFormationDateForInput,
   isSupportedFormationDocument,
   normalizeFormationDraft,
   normalizeFormationRegistration,
@@ -19,6 +21,11 @@ assert.equal(normalizeFormationDraft(draft).title, 'Protection des marques');
 assert.equal(normalizeFormationDraft(draft).location, 'Antananarivo Centre');
 assert.equal(normalizeFormationDraft(draft).date, '2026-11-15');
 assert.equal(normalizeFormationDraft({ ...draft, date: '20/11/2026' }).date, '2026-11-20');
+assert.equal(formatFormationDate('2026-11-20'), '20 novembre 2026');
+assert.equal(formatFormationDate('20/11/2026'), '20 novembre 2026');
+assert.equal(formatFormationDateForInput('2026-11-20'), '20/11/2026');
+assert.equal(formatFormationDateForInput('20/11/2026'), '20/11/2026');
+assert.equal(formatFormationDate(''), '');
 assert.deepEqual(validateFormationDraft(draft), {});
 assert.equal(normalizeFormationDraft({ ...draft, date: '15 Avril 2024' }).date, '2024-04-15');
 assert.match(validateFormationDraft({ ...draft, date: '31/02/2026' }).form ?? '', /date valide/);
