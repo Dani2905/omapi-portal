@@ -1,0 +1,15 @@
+Correction de l’enregistrement des formations
+
+Cause : le formulaire acceptait des dates telles que 20/11/2026 alors que l’API n’acceptait que le format ISO (2026-11-20). La date est maintenant normalisée au format ISO avant envoi. Le serveur accepte aussi les dates numériques françaises, et les dates impossibles sont refusées avec un message explicite.
+
+Fichiers inclus dans la mise à jour :
+- components/admin/FormationFormModal.tsx
+- utils/formationLogic.ts
+- tests/formations.test.ts
+- backend/app.js
+
+Publication :
+1. Dans le clone OMAPI de GitHub Desktop, remplacer ces fichiers par ceux de l’archive, puis vérifier et publier les changements.
+2. Pour que la création fonctionne côté serveur, copier aussi backend/app.js dans le dossier racine de l’application Node OMAPI sur cPanel, remplacer app.js, puis redémarrer l’application. Le push GitHub/Netlify seul ne met pas à jour l’API cPanel.
+3. Aucune migration SQL n’est nécessaire.
+4. Tester avec la date 20/11/2026 : elle doit être envoyée à l’API comme 2026-11-20 et la formation doit être enregistrée.

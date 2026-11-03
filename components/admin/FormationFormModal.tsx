@@ -200,7 +200,7 @@ const FormationFormModal: React.FC<FormationFormModalProps> = ({ isOpen, onClose
                                 value={formData.date || ''}
                                 maxLength={80}
                                 onChange={(e) => setFormData((previous) => ({ ...previous, date: e.target.value }))}
-                                placeholder="Ex: 15 Avril 2024"
+                                placeholder="JJ/MM/AAAA, ex. 20/11/2026"
                             />
                         </div>
                     </div>

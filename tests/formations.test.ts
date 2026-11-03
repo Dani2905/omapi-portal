@@ -17,7 +17,11 @@ const draft: Partial<Formation> = {
 };
 assert.equal(normalizeFormationDraft(draft).title, 'Protection des marques');
 assert.equal(normalizeFormationDraft(draft).location, 'Antananarivo Centre');
+assert.equal(normalizeFormationDraft(draft).date, '2026-11-15');
+assert.equal(normalizeFormationDraft({ ...draft, date: '20/11/2026' }).date, '2026-11-20');
 assert.deepEqual(validateFormationDraft(draft), {});
+assert.equal(normalizeFormationDraft({ ...draft, date: '15 Avril 2024' }).date, '2024-04-15');
+assert.match(validateFormationDraft({ ...draft, date: '31/02/2026' }).form ?? '', /date valide/);
 
 console.log('Formations test 2 — titre vide/court et catégorie inconnue refusés');
 assert.match(validateFormationDraft({ title: '   ', category: 'Base' }).title ?? '', /obligatoire/);

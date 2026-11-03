@@ -18,12 +18,59 @@ export interface FormationRegistrationDraft {
 export const normalizeFormationTitle = (value: string | undefined): string =>
   (value ?? '').trim().replace(/\s+/g, ' ');
 
+function isValidIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function formatIsoDate(day: number, month: number, year: number): string | null {
+  if (year < 1000 || year > 9999 || month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+}
+
+const FRENCH_MONTHS: Record<string, number> = {
+  janvier: 1, janv: 1,
+  fevrier: 2, fevr: 2,
+  mars: 3,
+  avril: 4, avr: 4,
+  mai: 5,
+  juin: 6,
+  juillet: 7, juil: 7,
+  aout: 8,
+  septembre: 9, sept: 9,
+  octobre: 10, oct: 10,
+  novembre: 11, nov: 11,
+  decembre: 12, dec: 12,
+};
+
+export function normalizeFormationDate(value: string | undefined): string {
+  const input = (value ?? '').trim();
+  if (!input || isValidIsoDate(input)) return input;
+
+  const numericDate = /^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})$/.exec(input);
+  if (numericDate) {
+    return formatIsoDate(Number(numericDate[1]), Number(numericDate[2]), Number(numericDate[3])) || input;
+  }
+
+  const namedDate = /^(\d{1,2})\s+([\p{L}]+)\.?\s+(\d{4})$/u.exec(input);
+  if (namedDate) {
+    const monthName = namedDate[2].toLocaleLowerCase('fr').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const month = FRENCH_MONTHS[monthName];
+    if (month) return formatIsoDate(Number(namedDate[1]), month, Number(namedDate[3])) || input;
+  }
+
+  return input;
+}
+
 export function normalizeFormationDraft(draft: Partial<Formation>): Partial<Formation> {
   return {
     ...draft,
     title: normalizeFormationTitle(draft.title),
     category: draft.category === 'Avancee' ? 'Avancee' : 'Base',
-    date: draft.date?.trim() || '',
+    date: normalizeFormationDate(draft.date),
     time: draft.time?.trim() || '',
     location: draft.location?.trim().replace(/\s+/g, ' ') || '',
     description: draft.description?.trim() || '',
@@ -46,6 +93,11 @@ export function validateFormationDraft(draft: Partial<Formation>): FormationDraf
 
   if (draft.category !== 'Base' && draft.category !== 'Avancee') {
     errors.category = 'Choisissez la catégorie de cette formation.';
+  }
+
+  const normalizedDate = normalizeFormationDate(draft.date);
+  if (draft.date?.trim() && !isValidIsoDate(normalizedDate)) {
+    errors.form = 'Saisissez une date valide, par exemple 20/11/2026 ou 15 avril 2026.';
   }
 
   if ((draft.description?.length ?? 0) > 5000) {

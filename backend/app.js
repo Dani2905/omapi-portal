@@ -198,7 +198,7 @@ const programmeConfig = {
       const item = {
         title: cleanText(body?.title, 120),
         category: cleanText(body?.category, 20),
-        date: typeof (body?.date ?? body?.event_date) === 'string' ? String(body.date ?? body.event_date).trim() : '',
+        date: normalizeProgramDate(body?.date ?? body?.event_date),
         time: cleanText(body?.time ?? body?.event_time, 80),
         location: cleanText(body?.location, 200),
         description: typeof body?.description === 'string' ? body.description.trim() : '',
@@ -305,6 +305,20 @@ function isIsoDate(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = new Date(`${value}T00:00:00.000Z`);
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function normalizeProgramDate(value) {
+  const input = typeof value === 'string' ? value.trim() : '';
+  if (!input || isIsoDate(input)) return input;
+  const match = /^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})$/.exec(input);
+  if (!match) return input;
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  if (year < 1000 || month < 1 || month > 12 || day < 1 || day > 31) return input;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return input;
+  return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
 }
 
 function formatDbDate(value) {
