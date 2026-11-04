@@ -225,6 +225,15 @@ export function validateProfilePasswordChange(
   return undefined;
 }
 
+export function validateOptionalProfilePasswordChange(
+  enabled: boolean,
+  input: ProfilePasswordChangeInput,
+): string | undefined {
+  if (!enabled) return undefined;
+  if (!hasProfilePasswordChangeInput(input)) return 'Saisissez le nouveau mot de passe.';
+  return validateProfilePasswordChange(input);
+}
+
 const PASSWORD_GROUPS = [
   'abcdefghjkmnpqrstuvwxyz',
   'ABCDEFGHJKMNPQRSTUVWXYZ',

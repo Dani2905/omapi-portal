@@ -4,10 +4,9 @@ import { User } from '../../types';
 import { XMarkIcon, UsersIcon, EnvelopeIcon, KeyIcon, CheckIcon, PhotoIcon, EyeIcon, EyeSlashIcon } from './AdminIcons';
 import {
   hasPasswordCredential,
-  hasProfilePasswordChangeInput,
   normalizeEmail,
   normalizeName,
-  validateProfilePasswordChange,
+  validateOptionalProfilePasswordChange,
   validateUserDraft,
 } from '../../utils/userAccounts';
 import { optimizeProfilePhoto } from '../../utils/profilePhoto';
@@ -36,6 +35,7 @@ const ProfileFormModal: React.FC<ProfileFormModalProps> = ({
 }) => {
   const [formData, setFormData] = useState<Partial<User>>({});
   const [passwords, setPasswords] = useState({ current: '', new: '', confirm: '' });
+  const [isPasswordChangeEnabled, setIsPasswordChangeEnabled] = useState(false);
   const [error, setError] = useState('');
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -60,6 +60,7 @@ const ProfileFormModal: React.FC<ProfileFormModalProps> = ({
         avatar: currentUser.avatar || null,
       });
       setPasswords({ current: '', new: '', confirm: '' });
+      setIsPasswordChangeEnabled(false);
       setError('');
       setShowCurrentPassword(false);
       setShowNewPassword(false);
@@ -96,15 +97,16 @@ const ProfileFormModal: React.FC<ProfileFormModalProps> = ({
       return;
     }
 
-    const wantsPasswordChange = hasProfilePasswordChangeInput({
+    const passwordInput = {
       currentPassword: passwords.current,
       newPassword: passwords.new,
       confirmPassword: passwords.confirm,
-    });
-    const passwordError = validateProfilePasswordChange({
-      currentPassword: passwords.current,
-      newPassword: passwords.new,
-      confirmPassword: passwords.confirm,
+    };
+    // Un changement de mot de passe doit être demandé explicitement. Cela évite
+    // que l'auto-remplissage du navigateur bloque une simple sauvegarde du profil.
+    const wantsPasswordChange = isPasswordChangeEnabled;
+    const passwordError = validateOptionalProfilePasswordChange(isPasswordChangeEnabled, {
+      ...passwordInput,
       hasCurrentCredential: accountHasPassword,
     });
 
@@ -295,99 +297,124 @@ const ProfileFormModal: React.FC<ProfileFormModalProps> = ({
                     <div className="bg-slate-50 rounded-xl p-6 border border-slate-100 relative overflow-hidden group hover:border-slate-200 transition-colors">
                         <div className="absolute top-0 right-0 w-20 h-20 bg-blue-500/5 rounded-full blur-2xl -mr-5 -mt-5"></div>
 
-                        <div className="flex items-center mb-6 relative z-10">
+                        <div className="flex items-center mb-5 relative z-10">
                             <div className="p-2 bg-white rounded-lg shadow-sm text-blue-600 mr-3 border border-slate-100">
                                 <KeyIcon className="w-5 h-5" />
                             </div>
                             <div>
                                 <h4 className="text-sm font-bold text-gray-900">Mot de passe</h4>
                                 <p className="text-xs text-gray-500">
-                                  {accountHasPassword
-                                    ? 'Saisissez le mot de passe actuel pour en définir un nouveau. Laissez tous les champs vides pour ne pas modifier.'
-                                    : "Aucun mot de passe n'est encore défini pour ce compte : vous pouvez en définir un maintenant."}
+                                  {isPasswordChangeEnabled
+                                    ? accountHasPassword
+                                      ? 'Saisissez le mot de passe actuel pour en définir un nouveau.'
+                                      : 'Vous pouvez définir un mot de passe pour ce compte.'
+                                    : 'Laissez cette option désactivée pour conserver votre mot de passe actuel.'}
                                 </p>
                             </div>
                         </div>
 
                         <div className="space-y-6 relative z-10">
-                          {accountHasPassword && (
-                            <div className="space-y-2 md:max-w-[calc(50%-0.75rem)]">
-                                <label htmlFor="profile-current-password" className="text-xs font-semibold text-gray-500">Mot de passe actuel</label>
-                                <div className="relative">
+                          <label htmlFor="profile-change-password" className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+                            <input
+                              id="profile-change-password"
+                              type="checkbox"
+                              checked={isPasswordChangeEnabled}
+                              onChange={(event) => {
+                                const enabled = event.target.checked;
+                                setIsPasswordChangeEnabled(enabled);
+                                setPasswords({ current: '', new: '', confirm: '' });
+                                setShowCurrentPassword(false);
+                                setShowNewPassword(false);
+                                setShowConfirmPassword(false);
+                                if (error) setError('');
+                              }}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            Modifier également mon mot de passe
+                          </label>
+
+                          {isPasswordChangeEnabled && (
+                            <div className="space-y-6">
+                              {accountHasPassword && (
+                                <div className="space-y-2 md:max-w-[calc(50%-0.75rem)]">
+                                  <label htmlFor="profile-current-password" className="text-xs font-semibold text-gray-500">Mot de passe actuel</label>
+                                  <div className="relative">
                                     <input
-                                        id="profile-current-password"
-                                        type={showCurrentPassword ? "text" : "password"}
-                                        autoComplete="current-password"
-                                        className={passwordInputClass}
-                                        placeholder="••••••••"
-                                        value={passwords.current}
-                                        onChange={e => updatePasswordField('current', e.target.value)}
+                                      id="profile-current-password"
+                                      type={showCurrentPassword ? "text" : "password"}
+                                      autoComplete="current-password"
+                                      className={passwordInputClass}
+                                      placeholder="••••••••"
+                                      value={passwords.current}
+                                      onChange={e => updatePasswordField('current', e.target.value)}
                                     />
                                     <button
-                                        type="button"
-                                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                                        className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 transition-colors"
-                                        aria-label={showCurrentPassword ? 'Masquer le mot de passe actuel' : 'Afficher le mot de passe actuel'}
+                                      type="button"
+                                      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                                      className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 transition-colors"
+                                      aria-label={showCurrentPassword ? 'Masquer le mot de passe actuel' : 'Afficher le mot de passe actuel'}
                                     >
-                                        {showCurrentPassword ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                                      {showCurrentPassword ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
                                     </button>
+                                  </div>
                                 </div>
+                              )}
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                  <label htmlFor="profile-new-password" className="text-xs font-semibold text-gray-500">Nouveau mot de passe</label>
+                                  <div className="relative">
+                                    <input
+                                      id="profile-new-password"
+                                      type={showNewPassword ? "text" : "password"}
+                                      autoComplete="new-password"
+                                      minLength={12}
+                                      className={passwordInputClass}
+                                      placeholder="••••••••"
+                                      value={passwords.new}
+                                      onChange={e => updatePasswordField('new', e.target.value)}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowNewPassword(!showNewPassword)}
+                                      className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 transition-colors"
+                                      aria-label={showNewPassword ? 'Masquer le nouveau mot de passe' : 'Afficher le nouveau mot de passe'}
+                                    >
+                                      {showNewPassword ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                                    </button>
+                                  </div>
+                                  <p className="text-[11px] text-gray-400">12 caractères minimum, différent de l'actuel.</p>
+                                </div>
+                                <div className="space-y-2">
+                                  <label htmlFor="profile-confirm-password" className="text-xs font-semibold text-gray-500">Confirmer</label>
+                                  <div className="relative">
+                                    <input
+                                      id="profile-confirm-password"
+                                      type={showConfirmPassword ? "text" : "password"}
+                                      autoComplete="new-password"
+                                      minLength={12}
+                                      className={`w-full px-4 py-2.5 bg-white border rounded-lg focus:ring-2 outline-none transition-all text-gray-700 placeholder-gray-300 pr-10 ${
+                                        passwords.confirm && passwords.new !== passwords.confirm
+                                        ? 'border-red-300 focus:ring-red-100 focus:border-red-400'
+                                        : 'border-gray-200 focus:ring-blue-500/20 focus:border-blue-500'
+                                      }`}
+                                      placeholder="••••••••"
+                                      value={passwords.confirm}
+                                      onChange={e => updatePasswordField('confirm', e.target.value)}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                      className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 transition-colors"
+                                      aria-label={showConfirmPassword ? 'Masquer la confirmation' : 'Afficher la confirmation'}
+                                    >
+                                      {showConfirmPassword ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
                             </div>
                           )}
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="space-y-2">
-                                <label htmlFor="profile-new-password" className="text-xs font-semibold text-gray-500">Nouveau mot de passe</label>
-                                <div className="relative">
-                                    <input
-                                        id="profile-new-password"
-                                        type={showNewPassword ? "text" : "password"}
-                                        autoComplete="new-password"
-                                        minLength={8}
-                                        className={passwordInputClass}
-                                        placeholder="••••••••"
-                                        value={passwords.new}
-                                        onChange={e => updatePasswordField('new', e.target.value)}
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowNewPassword(!showNewPassword)}
-                                        className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 transition-colors"
-                                        aria-label={showNewPassword ? 'Masquer le nouveau mot de passe' : 'Afficher le nouveau mot de passe'}
-                                    >
-                                        {showNewPassword ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
-                                    </button>
-                                </div>
-                                <p className="text-[11px] text-gray-400">8 caractères minimum, différent de l'actuel.</p>
-                            </div>
-                            <div className="space-y-2">
-                                <label htmlFor="profile-confirm-password" className="text-xs font-semibold text-gray-500">Confirmer</label>
-                                <div className="relative">
-                                    <input
-                                        id="profile-confirm-password"
-                                        type={showConfirmPassword ? "text" : "password"}
-                                        autoComplete="new-password"
-                                        minLength={8}
-                                        className={`w-full px-4 py-2.5 bg-white border rounded-lg focus:ring-2 outline-none transition-all text-gray-700 placeholder-gray-300 pr-10 ${
-                                            passwords.confirm && passwords.new !== passwords.confirm
-                                            ? 'border-red-300 focus:ring-red-100 focus:border-red-400'
-                                            : 'border-gray-200 focus:ring-blue-500/20 focus:border-blue-500'
-                                        }`}
-                                        placeholder="••••••••"
-                                        value={passwords.confirm}
-                                        onChange={e => updatePasswordField('confirm', e.target.value)}
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                        className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 transition-colors"
-                                        aria-label={showConfirmPassword ? 'Masquer la confirmation' : 'Afficher la confirmation'}
-                                    >
-                                        {showConfirmPassword ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
-                                    </button>
-                                </div>
-                            </div>
-                          </div>
                         </div>
                     </div>
                 </div>

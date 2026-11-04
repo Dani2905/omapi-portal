@@ -1,0 +1,12 @@
+Correctif « Enregistrer les modifications » dans Mon profil
+
+Cause corrigée : certains navigateurs ou gestionnaires de mots de passe peuvent remplir automatiquement le champ du mot de passe actuel. Le formulaire interprétait cette valeur comme une demande de changement, puis exigeait un nouveau mot de passe.
+
+La zone mot de passe est maintenant désactivée par défaut. Le formulaire ne la montre et ne valide un changement que si l’utilisateur coche explicitement « Modifier également mon mot de passe ». Une sauvegarde du nom, de l’adresse e-mail ou de la photo n’exige donc pas de nouveau mot de passe.
+
+Fichiers à appliquer dans le clone du dépôt avant commit/push :
+- components/admin/ProfileFormModal.tsx
+- utils/userAccounts.ts
+- tests/userAccounts.test.ts
+
+Pas de modification backend/cPanel nécessaire pour ce correctif. Tests comptes, tests photo, TypeScript et build Vite réussis.

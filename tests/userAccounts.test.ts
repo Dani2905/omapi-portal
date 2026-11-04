@@ -11,6 +11,7 @@ import {
   normalizeName,
   validateNewPassword,
   validatePasswordSelection,
+  validateOptionalProfilePasswordChange,
   validateProfilePasswordChange,
   validateUserDraft,
   verifyPasswordCredential,
@@ -139,6 +140,12 @@ async function main() {
     currentPassword: '', newPassword: nextPassword, confirmPassword: nextPassword, hasCurrentCredential: false,
   }), undefined, 'un compte hérité sans mot de passe peut en définir un premier');
   assert.match(validateNewPassword('court') ?? '', /12 caractères/);
+  assert.equal(validateOptionalProfilePasswordChange(false, {
+    currentPassword: 'autofilled-value', newPassword: '', confirmPassword: '', hasCurrentCredential: true,
+  }), undefined, 'mot de passe auto-rempli ignoré si le changement est désactivé');
+  assert.match(validateOptionalProfilePasswordChange(true, {
+    currentPassword: '', newPassword: '', confirmPassword: '', hasCurrentCredential: true,
+  }) ?? '', /Saisissez le nouveau mot de passe/);
 
   console.log("Test 11 — changement effectif : l'ancien mot de passe cesse de fonctionner");
   const oldPassword = generateTemporaryPassword();
