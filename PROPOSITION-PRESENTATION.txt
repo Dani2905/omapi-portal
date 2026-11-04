@@ -1,0 +1,7 @@
+Proposition de redesign pour la page Présentation
+
+La modification concerne uniquement pages/Presentation.tsx. Elle conserve les textes et informations historiques de la page existante, réorganisés en sections visuelles : introduction, repères chronologiques, attributions, valeurs, partenariats et appel à l’action.
+
+Aucun changement backend, base de données, application Cabinet, push ou déploiement n'a été effectué. Vérifications passées : TypeScript, build Vite et git diff --check.
+
+Pour appliquer dans le clone OMAPI, comparer puis copier pages/Presentation.tsx au même emplacement. La route de prévisualisation est /presentation.
