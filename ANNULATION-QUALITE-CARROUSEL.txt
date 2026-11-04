@@ -1,0 +1,12 @@
+Annulation du correctif de qualité du carrousel
+
+Cette archive contient les versions précédant le correctif qualité pour les seuls fichiers modifiés par ce correctif :
+- components/admin/SlideFormModal.tsx
+- components/admin/NewsFormModal.tsx
+- utils/editorialLogic.ts
+- tests/editorialLogic.test.ts
+- backend/app.js
+
+Elle rétablit l'ancien redimensionnement/compression côté navigateur, l'ancienne limite de 2,1 millions de caractères de data URL et le filtre MIME précédent.
+
+Si le correctif qualité n'a pas été copié dans le clone GitHub ni déployé, aucune action n'est requise : le workspace est déjà revenu à l'état précédent. Si tu l'avais copié dans ton clone, copie ces fichiers dans les mêmes chemins, vérifie GitHub Desktop, puis commit/push. Si tu avais aussi déployé le backend qualité sur cPanel, remplace uniquement le fichier app.js dans /home/ciprabem/omapi-api et redémarre uniquement l'application Node OMAPI. Ne touche pas à l'application Cabinet.

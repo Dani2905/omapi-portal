@@ -10,17 +10,12 @@ interface SlideFormModalProps {
   initialData: Partial<Slide>;
 }
 
-const MAX_SLIDE_IMAGE_UPLOAD_BYTES = 5 * 1024 * 1024;
-const MAX_SLIDE_IMAGE_DATA_URL_LENGTH = 7_000_000;
-
 const SlideFormModal: React.FC<SlideFormModalProps> = ({ isOpen, onClose, onSave, initialData }) => {
   const [formData, setFormData] = useState<Partial<Slide>>({});
-  const [uploadError, setUploadError] = useState('');
 
   useEffect(() => {
     if (isOpen) {
       setFormData(initialData);
-      setUploadError('');
     }
   }, [isOpen, initialData]);
 
@@ -30,42 +25,47 @@ const SlideFormModal: React.FC<SlideFormModalProps> = ({ isOpen, onClose, onSave
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const input = e.currentTarget;
-    const file = input.files?.[0];
-    input.value = '';
-    if (!file) return;
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          
+          const MAX_WIDTH = 800;
+          const MAX_HEIGHT = 800;
 
-    if (!/^image\/(jpeg|png|webp|gif)$/i.test(file.type)) {
-      setUploadError('Choisissez une image JPEG, PNG, WebP ou GIF.');
-      return;
-    }
-    if (file.size <= 0 || file.size > MAX_SLIDE_IMAGE_UPLOAD_BYTES) {
-      setUploadError('L’image est vide ou dépasse la limite de 5 Mo.');
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onerror = () => setUploadError('La lecture de l’image a échoué. Réessayez avec un autre fichier.');
-    reader.onload = () => {
-      if (typeof reader.result !== 'string') {
-        setUploadError('La lecture de l’image a échoué.');
-        return;
-      }
-      if (reader.result.length > MAX_SLIDE_IMAGE_DATA_URL_LENGTH) {
-        setUploadError('L’image d’origine dépasse la limite de stockage. Choisissez un fichier de 5 Mo ou moins.');
-        return;
-      }
-
-      const image = new Image();
-      image.onerror = () => setUploadError('Le fichier sélectionné ne peut pas être décodé comme image.');
-      image.onload = () => {
-        // Garde les octets originaux : aucun redimensionnement ni recompression JPEG.
-        setFormData((current) => ({ ...current, image: reader.result as string }));
-        setUploadError('');
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+            setFormData({ ...formData, image: dataUrl });
+          } else {
+            setFormData({ ...formData, image: reader.result as string });
+          }
+        };
+        img.src = reader.result as string;
       };
-      image.src = reader.result;
-    };
-    reader.readAsDataURL(file);
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -164,11 +164,10 @@ const SlideFormModal: React.FC<SlideFormModalProps> = ({ isOpen, onClose, onSave
                                         </span>
                                         <p className="pl-1">ou glisser-déposer</p>
                                     </div>
-                                    <p className="text-[10px] text-slate-500">JPEG, PNG, WebP ou GIF · 5 Mo maximum · fichier original conservé</p>
+                                    <p className="text-[10px] text-slate-500 uppercase">PNG, JPG, GIF (MAX 5MB)</p>
                                 </div>
-                                <input id="slide-file-upload" name="slide-file-upload" type="file" className="sr-only" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleImageUpload} />
+                                <input id="slide-file-upload" name="slide-file-upload" type="file" className="sr-only" accept="image/*" onChange={handleImageUpload} />
                             </label>
-                            {uploadError && <p role="alert" className="mt-2 text-xs font-medium text-red-600">{uploadError}</p>}
                         </div>
                     </div>
 
