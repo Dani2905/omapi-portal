@@ -47,7 +47,7 @@ const NewsFormModal: React.FC<NewsFormModalProps> = ({ isOpen, onClose, onSave, 
       return;
     }
     if (file.size <= 0 || file.size > MAX_NEWS_IMAGE_UPLOAD_BYTES) {
-      setFormError('L’image est vide ou dépasse la limite de 8 Mo.');
+      setFormError('L’image est vide ou dépasse la limite de 5 Mo.');
       input.value = '';
       return;
     }
@@ -64,35 +64,25 @@ const NewsFormModal: React.FC<NewsFormModalProps> = ({ isOpen, onClose, onSave, 
         return;
       }
 
+      const originalDataUrl = reader.result;
+      if (originalDataUrl.length > MAX_NEWS_IMAGE_DATA_URL_LENGTH) {
+        setFormError('L’image d’origine dépasse la limite de stockage. Choisissez un fichier de 5 Mo ou moins.');
+        input.value = '';
+        return;
+      }
+
       const image = new Image();
       image.onerror = () => {
         setFormError('Le fichier sélectionné ne peut pas être décodé comme image.');
         input.value = '';
       };
       image.onload = () => {
-        const canvas = document.createElement('canvas');
-        const scale = Math.min(1, 800 / image.naturalWidth, 800 / image.naturalHeight);
-        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-        const context = canvas.getContext('2d');
-        if (!context) {
-          setFormError('Le navigateur ne peut pas préparer cette image.');
-          input.value = '';
-          return;
-        }
-
-        context.drawImage(image, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
-        if (dataUrl.length > MAX_NEWS_IMAGE_DATA_URL_LENGTH) {
-          setFormError('L’image compressée reste trop volumineuse. Choisissez une image plus petite.');
-          input.value = '';
-          return;
-        }
-        setFormData((current) => ({ ...current, image: dataUrl }));
+        // Keep the uploaded bytes unchanged: no canvas resize or lossy JPEG conversion.
+        setFormData((current) => ({ ...current, image: originalDataUrl }));
         setFormError('');
         input.value = '';
       };
-      image.src = reader.result;
+      image.src = originalDataUrl;
     };
     reader.readAsDataURL(file);
   };
@@ -231,6 +221,7 @@ const NewsFormModal: React.FC<NewsFormModalProps> = ({ isOpen, onClose, onSave, 
                                         {/* Image Section */}
                                         <div className="bg-slate-50 p-4 border border-slate-200">
                                             <label className="block text-[11px] font-bold text-slate-700 uppercase mb-2 tracking-wide">Image de couverture</label>
+                                            <p className="mb-2 text-[10px] text-slate-500">JPEG, PNG, WebP ou GIF · 5 Mo maximum · fichier original conservé</p>
                                             <div className="relative h-32 overflow-hidden bg-slate-200 border border-slate-300 mb-3 group">
                                                 {formData.image ? (
                                                     <img src={formData.image} alt="Preview" className="w-full h-full object-cover grayscale group-hover:grayscale-0" />

@@ -6,8 +6,9 @@ export const NEWS_CATEGORIES = [
 ] as const;
 export const MAX_NEWS_TITLE_LENGTH = 180;
 export const MAX_NEWS_DESCRIPTION_LENGTH = 500;
-export const MAX_NEWS_IMAGE_UPLOAD_BYTES = 8 * 1024 * 1024;
-export const MAX_NEWS_IMAGE_DATA_URL_LENGTH = 2 * 1024 * 1024;
+export const MAX_NEWS_IMAGE_UPLOAD_BYTES = 5 * 1024 * 1024;
+// 5 MiB original files encoded as base64 are just under 7 million characters.
+export const MAX_NEWS_IMAGE_DATA_URL_LENGTH = 7_000_000;
 
 const FRENCH_MONTHS: Record<string, number> = {
   janvier: 0, janv: 0, jan: 0,
@@ -57,7 +58,7 @@ export function isAllowedNewsImageUrl(value: unknown): boolean {
   if (typeof value !== 'string') return false;
   const image = value.trim();
   if (!image || /[\u0000-\u0020]/.test(image)) return false;
-  if (/^data:image\/(?:jpeg|png|webp);base64,[a-z0-9+/=]+$/i.test(image)) {
+  if (/^data:image\/(?:jpeg|png|webp|gif);base64,[a-z0-9+/=]+$/i.test(image)) {
     return image.length <= MAX_NEWS_IMAGE_DATA_URL_LENGTH;
   }
   if (image.startsWith('/') && !image.startsWith('//') && !image.includes('\\')) return true;

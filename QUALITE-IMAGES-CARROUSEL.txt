@@ -1,0 +1,19 @@
+Correctif de qualité des images du carrousel
+
+La perte venait de deux importeurs : les slides manuels et les actualités à la une étaient ramenés à 800 px puis reconvertis en JPEG avec une qualité de 0,60–0,65. Le navigateur envoyait donc une version déjà réduite au carrousel.
+
+Le correctif conserve maintenant le fichier original (JPEG, PNG, WebP ou GIF), sans canvas, redimensionnement ni recompression. Limite d'import : 5 Mo par image. L'API OMAPI accepte les data URL jusqu'à 7 000 000 caractères; la limite JSON existante de 8 Mo reste suffisante.
+
+Ordre d'application :
+1. Dans GitHub Desktop, comparer/copier les fichiers du correctif avec leurs chemins, puis commit/push.
+2. Dans cPanel, remplacer uniquement /home/ciprabem/omapi-api/app.js par backend/app.js contenu dans l'archive et redémarrer uniquement l'application Node omapi-api. Ne pas toucher à l'application Cabinet. Aucun SQL ni npm install nécessaire.
+3. Après mise à jour du frontend et backend, réimporter les images originales des slides/actualités déjà compressées : leur qualité perdue ne peut pas être restaurée depuis la version enregistrée.
+
+Fichiers du correctif :
+- components/admin/SlideFormModal.tsx
+- components/admin/NewsFormModal.tsx
+- utils/editorialLogic.ts
+- tests/editorialLogic.test.ts
+- backend/app.js
+
+Vérifications : tests éditoriaux, TypeScript, syntaxe Node, build et git diff --check passés. Rien n'a été poussé ni déployé.

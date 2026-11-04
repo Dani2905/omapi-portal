@@ -508,8 +508,9 @@ function normalizeSiteSetting(key, value) {
 
 function isSafeImageValue(value) {
   if (!value) return true;
-  if (value.length > 2_100_000 || /[\u0000-\u0020]/.test(value)) return false;
-  if (/^data:image\/(?:jpeg|png|webp);base64,[a-z0-9+/=]+$/i.test(value)) return true;
+  // 5 MiB original files encoded as base64 are just under 7 million characters.
+  if (value.length > 7_000_000 || /[\u0000-\u0020]/.test(value)) return false;
+  if (/^data:image\/(?:jpeg|png|webp|gif);base64,[a-z0-9+/=]+$/i.test(value)) return true;
   if (value.startsWith('/') && !value.startsWith('//') && !value.includes('\\') && !value.split('/').includes('..')) return true;
   try {
     const parsed = new URL(value);

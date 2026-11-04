@@ -4,6 +4,7 @@ import {
   buildEditorialSlides,
   getHomepageNewsSection,
   isAllowedNewsImageUrl,
+  MAX_NEWS_IMAGE_DATA_URL_LENGTH,
   normalizeNewsDraft,
   parseEditorialDate,
   sanitizeNewsHtml,
@@ -37,6 +38,10 @@ assert.equal(isAllowedNewsImageUrl('/src/assets/photo.jpg'), true);
 assert.equal(isAllowedNewsImageUrl('javascript:alert(1)'), false);
 assert.equal(isAllowedNewsImageUrl('//example.invalid/photo.jpg'), false);
 assert.equal(isAllowedNewsImageUrl('http://example.invalid/photo.jpg'), false);
+assert.equal(isAllowedNewsImageUrl('data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs='), true);
+const largeOriginalImagePrefix = 'data:image/png;base64,';
+assert.equal(isAllowedNewsImageUrl(largeOriginalImagePrefix + 'A'.repeat(MAX_NEWS_IMAGE_DATA_URL_LENGTH - largeOriginalImagePrefix.length)), true);
+assert.equal(isAllowedNewsImageUrl(largeOriginalImagePrefix + 'A'.repeat(MAX_NEWS_IMAGE_DATA_URL_LENGTH + 1 - largeOriginalImagePrefix.length)), false);
 assert.equal(isAllowedNewsImageUrl(''), false);
 
 console.log('Centre éditorial test 3 — assainissement du contenu riche');
