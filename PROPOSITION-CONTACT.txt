@@ -1,0 +1,5 @@
+Proposition de redesign pour la page Contactez-nous
+
+Le changement visuel concerne uniquement pages/Contact.tsx. Le formulaire conserve son fonctionnement de simulation; aucun envoi e-mail/SMTP, API, base de données, application Cabinet, push ou déploiement n'a été ajouté.
+
+Pour essayer la proposition dans le clone OMAPI, copier pages/Contact.tsx au même emplacement après comparaison avec les changements locaux, puis vérifier la route /contact dans le preview. Vérifications effectuées : TypeScript, build Vite et git diff --check.
