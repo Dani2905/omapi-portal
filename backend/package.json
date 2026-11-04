@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "node app.js",
-    "test:auth": "node --test authCrypto.test.js"
+    "test:auth": "node --test authCrypto.test.js",
+    "test:profile-photo": "node --test profilePhoto.test.js"
   },
   "dependencies": {
     "cors": "^2.8.6",

@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import pg from 'pg';
 import { createSessionToken, hashPassword, hashSessionToken, verifyPassword } from './authCrypto.js';
+import { normalizeProfilePhoto } from './profilePhoto.js';
 
 const { Pool } = pg;
 const app = express();
@@ -48,7 +49,10 @@ const LOGIN_MAX_FAILURES = 8;
 const loginFailures = new Map();
 
 const publicUserFields = `id, name, email, role, status, created_at, updated_at`;
-
+function mapAuthenticatedUser(row) {
+  const { avatar_data: avatarData, ...user } = row;
+  return { ...user, avatar: avatarData || null };
+}
 
 const editorialCategories = ['Annonce', 'Actualité', 'Blog', 'Déclaration', 'Événement', 'International', 'Juridique', 'Formation', 'Innovation'];
 const editorialConfig = {
@@ -570,7 +574,7 @@ function requireAuth(request, response, next) {
 
   const tokenHash = hashSessionToken(match[1]);
   pool.query(
-    `SELECT u.id, u.name, u.email, u.role, u.status, s.expires_at
+    `SELECT u.id, u.name, u.email, u.role, u.status, u.avatar_data, s.expires_at
        FROM admin_sessions s
        JOIN app_users u ON u.id = s.user_id
       WHERE s.token_hash = $1
@@ -583,8 +587,8 @@ function requireAuth(request, response, next) {
     if (!rows.length) {
       return response.status(401).json({ error: 'Session expired or invalid' });
     }
-    const { expires_at: expiresAt, ...user } = rows[0];
-    request.auth = { tokenHash, expiresAt, user };
+    const { expires_at: expiresAt, ...row } = rows[0];
+    request.auth = { tokenHash, expiresAt, user: mapAuthenticatedUser(row) };
     return next();
   }).catch(() => {
     console.error('OMAPI authentication lookup failed');
@@ -708,7 +712,7 @@ app.post('/api/auth/login', async (request, response) => {
 
   try {
     const { rows } = await pool.query(
-      `SELECT id, name, email, role, status, password_hash
+      `SELECT id, name, email, role, status, avatar_data, password_hash
          FROM app_users
         WHERE LOWER(email) = $1
         LIMIT 1`,
@@ -730,7 +734,8 @@ app.post('/api/auth/login', async (request, response) => {
        RETURNING expires_at`,
       [account.id, tokenHash, SESSION_HOURS],
     );
-    const { password_hash: _passwordHash, ...user } = account;
+    const { password_hash: _passwordHash, avatar_data: avatarData, ...userFields } = account;
+    const user = { ...userFields, avatar: avatarData || null };
     return response.status(200).json({
       token,
       tokenType: 'Bearer',
@@ -755,7 +760,12 @@ app.patch('/api/auth/profile', requireAuth, async (request, response) => {
   const currentPassword = request.body?.currentPassword;
   const newPassword = request.body?.password;
   const changingPassword = Boolean(currentPassword || newPassword);
+  const hasAvatarUpdate = Object.prototype.hasOwnProperty.call(request.body || {}, 'avatar');
+  const parsedAvatar = hasAvatarUpdate ? normalizeProfilePhoto(request.body.avatar) : { ok: true, value: null };
 
+  if (hasAvatarUpdate && !parsedAvatar.ok) {
+    return response.status(400).json({ error: 'Profile photo is invalid or exceeds 320 KB' });
+  }
   if (name.length < 2 || name.length > 200 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 320) {
     return response.status(400).json({ error: 'Name or email is invalid' });
   }
@@ -794,10 +804,11 @@ app.patch('/api/auth/profile', requireAuth, async (request, response) => {
               email = $2,
               password_hash = $3,
               password_changed_at = CASE WHEN $4::boolean THEN NOW() ELSE password_changed_at END,
+              avatar_data = CASE WHEN $6::boolean THEN $7 ELSE avatar_data END,
               updated_at = NOW()
         WHERE id = $5
-        RETURNING id, name, email, role, status`,
-      [name, email, passwordHash, changingPassword, request.auth.user.id],
+        RETURNING id, name, email, role, status, avatar_data`,
+      [name, email, passwordHash, changingPassword, request.auth.user.id, hasAvatarUpdate, parsedAvatar.value],
     );
 
     if (changingPassword) {
@@ -809,7 +820,7 @@ app.patch('/api/auth/profile', requireAuth, async (request, response) => {
       );
     }
     await client.query('COMMIT');
-    return response.json({ user: updatedRows[0] });
+    return response.json({ user: mapAuthenticatedUser(updatedRows[0]) });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     if (error?.code === '23505') {

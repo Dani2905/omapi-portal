@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User } from '../../types';
 import { XMarkIcon, UsersIcon, EnvelopeIcon, KeyIcon, CheckIcon, PhotoIcon, EyeIcon, EyeSlashIcon } from './AdminIcons';
 import {
@@ -10,6 +10,7 @@ import {
   validateProfilePasswordChange,
   validateUserDraft,
 } from '../../utils/userAccounts';
+import { optimizeProfilePhoto } from '../../utils/profilePhoto';
 
 export interface ProfileSaveData extends Partial<User> {
   password?: string;
@@ -40,6 +41,8 @@ const ProfileFormModal: React.FC<ProfileFormModalProps> = ({
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const accountHasPassword = requiresCurrentPassword || hasPasswordCredential(currentUser);
 
@@ -54,6 +57,7 @@ const ProfileFormModal: React.FC<ProfileFormModalProps> = ({
         email: currentUser.email,
         role: currentUser.role,
         status: currentUser.status,
+        avatar: currentUser.avatar || null,
       });
       setPasswords({ current: '', new: '', confirm: '' });
       setError('');
@@ -61,12 +65,15 @@ const ProfileFormModal: React.FC<ProfileFormModalProps> = ({
       setShowNewPassword(false);
       setShowConfirmPassword(false);
       setIsSubmitting(false);
+      setIsProcessingPhoto(false);
+      if (photoInputRef.current) photoInputRef.current.value = '';
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isProcessingPhoto || isSubmitting) return;
     setError('');
 
     const normalizedProfile: Partial<User> = {
@@ -75,6 +82,7 @@ const ProfileFormModal: React.FC<ProfileFormModalProps> = ({
       email: normalizeEmail(formData.email),
       role: currentUser.role,
       status: currentUser.status,
+      avatar: formData.avatar ?? null,
     };
 
     const profileErrors = validateUserDraft(
@@ -123,6 +131,24 @@ const ProfileFormModal: React.FC<ProfileFormModalProps> = ({
     }
   };
 
+  const handlePhotoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+
+    setError('');
+    setIsProcessingPhoto(true);
+    try {
+      const avatar = await optimizeProfilePhoto(file);
+      setFormData((previous) => ({ ...previous, avatar }));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Impossible de préparer cette photo.');
+    } finally {
+      setIsProcessingPhoto(false);
+    }
+  };
+
   const updatePasswordField = (
     field: keyof typeof passwords,
     value: string,
@@ -154,25 +180,47 @@ const ProfileFormModal: React.FC<ProfileFormModalProps> = ({
             {/* Header Pro */}
             <div className="relative bg-gradient-to-r from-slate-800 to-slate-900 px-8 py-8">
                 <div className="absolute top-4 right-4">
-                    <button type="button" onClick={onClose} disabled={isSubmitting} className="text-white/50 hover:text-white transition-colors bg-white/10 hover:bg-white/20 p-2 rounded-full backdrop-blur-sm disabled:opacity-50">
+                    <button type="button" onClick={onClose} disabled={isSubmitting || isProcessingPhoto} className="text-white/50 hover:text-white transition-colors bg-white/10 hover:bg-white/20 p-2 rounded-full backdrop-blur-sm disabled:opacity-50">
                         <XMarkIcon className="w-5 h-5" />
                     </button>
                 </div>
 
-                <div className="flex items-center space-x-6 relative z-10">
-                    {/* Avatar Circle */}
-                    <div className="relative group cursor-pointer">
-                        <div className="w-20 h-20 rounded-full bg-white/10 border-4 border-white/20 flex items-center justify-center text-3xl font-bold text-white shadow-xl backdrop-blur-md">
-                            {getInitials(formData.name || '')}
-                        </div>
-                        <div className="absolute bottom-0 right-0 bg-blue-600 border-2 border-slate-900 rounded-full p-1.5 text-white shadow-lg group-hover:scale-110 transition-transform" title="Modifier la photo (Bientôt disponible)">
-                            <PhotoIcon className="w-3 h-3" />
+                <div className="relative z-10 flex flex-col items-start gap-4 pr-8 sm:flex-row sm:items-center sm:gap-6 sm:pr-0">
+                    <div className="flex shrink-0 flex-col items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => photoInputRef.current?.click()}
+                            disabled={isProcessingPhoto || isSubmitting}
+                            aria-label={formData.avatar ? 'Changer la photo de profil' : 'Ajouter une photo de profil'}
+                            className="group relative h-20 w-20 overflow-hidden rounded-full border-4 border-white/20 bg-white/10 text-3xl font-bold text-white shadow-xl outline-none transition hover:border-blue-300 focus-visible:ring-2 focus-visible:ring-white disabled:cursor-wait disabled:opacity-70"
+                        >
+                            {formData.avatar
+                                ? <img src={formData.avatar} alt="Aperçu de la photo de profil" className="h-full w-full object-cover" />
+                                : getInitials(formData.name || '')}
+                            <span className="absolute bottom-0 right-0 rounded-full border-2 border-slate-900 bg-blue-600 p-1.5 text-white shadow-lg transition-transform group-hover:scale-110">
+                                <PhotoIcon className="h-3 w-3" />
+                            </span>
+                        </button>
+                        <input
+                            ref={photoInputRef}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            className="sr-only"
+                            onChange={handlePhotoChange}
+                            aria-label="Choisir une photo de profil"
+                        />
+                        <div className="flex items-center gap-2">
+                            <button type="button" onClick={() => photoInputRef.current?.click()} disabled={isProcessingPhoto || isSubmitting} className="text-xs font-semibold text-blue-100 underline decoration-blue-300 underline-offset-2 hover:text-white disabled:opacity-60">
+                                {isProcessingPhoto ? 'Optimisation…' : formData.avatar ? 'Changer' : 'Ajouter une photo'}
+                            </button>
+                            {formData.avatar && <button type="button" onClick={() => { setFormData((previous) => ({ ...previous, avatar: null })); setError(''); }} disabled={isProcessingPhoto || isSubmitting} className="text-xs font-semibold text-blue-100 underline decoration-blue-300 underline-offset-2 hover:text-white disabled:opacity-60">Retirer</button>}
                         </div>
                     </div>
 
-                    <div>
-                        <h3 className="text-2xl font-bold text-white tracking-tight">Mon Profil</h3>
-                        <p className="text-blue-200 text-sm mt-1 font-medium">Gérez vos informations personnelles et accès.</p>
+                    <div className="min-w-0">
+                        <h3 className="text-2xl font-bold tracking-tight text-white">Mon Profil</h3>
+                        <p className="mt-1 text-sm font-medium text-blue-200">Gérez vos informations personnelles et accès.</p>
+                        <p className="mt-2 text-[11px] text-blue-100/80">JPG, PNG ou WebP · 8 Mo max. La photo est recadrée et optimisée automatiquement.</p>
                     </div>
                 </div>
 
@@ -181,7 +229,7 @@ const ProfileFormModal: React.FC<ProfileFormModalProps> = ({
             </div>
 
             <form onSubmit={handleSubmit} className="flex flex-col">
-                <div className="p-8 space-y-8">
+                <div className="space-y-6 p-5 sm:space-y-8 sm:p-8">
                     {error && (
                         <div className="bg-red-50 text-red-600 text-xs font-medium p-3 rounded-lg border border-red-100 flex items-center animate-fadeIn" role="alert">
                             <span className="w-1.5 h-1.5 bg-red-500 rounded-full mr-2 flex-shrink-0"></span>
@@ -344,22 +392,22 @@ const ProfileFormModal: React.FC<ProfileFormModalProps> = ({
                     </div>
                 </div>
 
-                <div className="bg-gray-50 px-8 py-5 border-t border-gray-200 flex justify-between items-center rounded-b-2xl">
+                <div className="flex items-center justify-between gap-3 rounded-b-2xl border-t border-gray-200 bg-gray-50 px-5 py-4 sm:px-8 sm:py-5">
                     <button
                         type="button"
                         onClick={onClose}
-                        disabled={isSubmitting}
-                        className="text-sm font-semibold text-gray-500 hover:text-gray-800 transition-colors px-4 py-2 disabled:opacity-50"
+                        disabled={isSubmitting || isProcessingPhoto}
+                        className="px-3 py-2 text-sm font-semibold text-gray-500 transition-colors hover:text-gray-800 disabled:opacity-50 sm:px-4"
                     >
                         Annuler
                     </button>
                     <button
                         type="submit"
-                        disabled={isSubmitting}
-                        className="bg-slate-900 hover:bg-slate-800 disabled:opacity-60 text-white px-6 py-2.5 rounded-lg text-sm font-bold shadow-lg shadow-slate-900/20 hover:shadow-xl hover:-translate-y-0.5 transition-all flex items-center"
+                        disabled={isSubmitting || isProcessingPhoto}
+                        className="flex items-center rounded-lg bg-slate-900 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-slate-900/20 transition-all hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-xl disabled:opacity-60 sm:px-6 sm:text-sm"
                     >
-                        <CheckIcon className="w-4 h-4 mr-2" />
-                        {isSubmitting ? 'Enregistrement…' : 'Enregistrer les modifications'}
+                        <CheckIcon className="mr-2 h-4 w-4 shrink-0" />
+                        {isProcessingPhoto ? 'Optimisation…' : isSubmitting ? 'Enregistrement…' : 'Enregistrer les modifications'}
                     </button>
                 </div>
             </form>

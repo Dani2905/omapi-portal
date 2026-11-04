@@ -165,6 +165,8 @@ export interface User {
   email: string;
   role: 'Admin' | 'Éditeur';
   status: 'Actif' | 'Inactif';
+  /** Photo JPEG optimisée (data URL) du compte authentifié. */
+  avatar?: string | null;
   /** Champs hérités d’anciens comptes de démonstration; ne sont pas renvoyés par l’API. */
   passwordSalt?: string;
   passwordHash?: string;

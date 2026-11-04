@@ -1,0 +1,26 @@
+Ajout de la photo de profil à « Mon profil »
+
+La photo est choisie depuis l’appareil, recadrée au carré et convertie en JPEG dans le navigateur. Le fichier source est limité à 8 Mo; la version enregistrée est limitée à 320 Ko. L’API vérifie le format, la signature JPEG et la taille. La photo est stockée dans la colonne avatar_data de la table app_users et s’affiche aussi dans l’en-tête Admin. L’utilisateur peut la remplacer ou la retirer.
+
+Fichiers de l’archive :
+- components/admin/ProfileFormModal.tsx
+- components/admin/AdminHeader.tsx
+- pages/AdminDashboard.tsx
+- types.ts
+- utils/apiAuth.ts
+- utils/profilePhoto.ts
+- backend/app.js
+- backend/profilePhoto.js
+- backend/profilePhoto.test.js
+- backend/package.json
+- backend/schema/add_user_profile_photo.sql
+- database.sql
+- tests/profilePhoto.test.ts
+
+Ordre de mise en service :
+1. Dans la base dédiée au portail OMAPI (jamais celle du site Cabinet), exécuter backend/schema/add_user_profile_photo.sql. Il ajoute uniquement la colonne avatar_data et peut être réexécuté sans risque.
+2. Déployer ensemble backend/app.js et backend/profilePhoto.js dans le dossier racine de l’application Node OMAPI sur cPanel, puis redémarrer l’application. Le nouveau backend nécessite la colonne SQL avant le redémarrage.
+3. Appliquer les fichiers frontend via GitHub Desktop après avoir vérifié/synchronisé le clone. Ne remplacez pas de changements locaux non publiés sans les comparer.
+4. Vérifier la sélection, le recadrage, l’enregistrement, le remplacement, le retrait, puis la persistance après reconnexion.
+
+Vérifications locales passées : tests photo frontend et backend, tests d’authentification backend, TypeScript lint et build Vite. Rien n’a été poussé ni déployé.

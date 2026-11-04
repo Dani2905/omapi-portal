@@ -8,6 +8,7 @@ export interface ApiAuthUser {
   email: string;
   role: 'Admin' | 'Éditeur';
   status?: 'Actif' | 'Inactif';
+  avatar?: string | null;
 }
 
 export function getApiToken(): string | null {

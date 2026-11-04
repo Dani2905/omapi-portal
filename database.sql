@@ -12,10 +12,12 @@ CREATE TABLE IF NOT EXISTS app_users (
   status TEXT NOT NULL DEFAULT 'Actif' CHECK (status IN ('Actif', 'Inactif')),
   -- Hash scrypt généré côté serveur ; jamais un mot de passe en clair.
   password_hash TEXT NOT NULL,
+  avatar_data TEXT,
   password_changed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE app_users ADD COLUMN IF NOT EXISTS avatar_data TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS app_users_email_lower_uq ON app_users (LOWER(email));
 
 CREATE TABLE IF NOT EXISTS admin_sessions (

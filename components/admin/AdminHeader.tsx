@@ -8,6 +8,7 @@ interface AdminHeaderProps {
   activeTab: string;
   userName: string;
   userRole: string;
+  userAvatar?: string | null;
   onProfileClick?: () => void;
   systemNotifications?: SystemNotification[];
   onMarkAsRead?: (id: string) => void;
@@ -16,7 +17,7 @@ interface AdminHeaderProps {
 }
 
 const AdminHeader: React.FC<AdminHeaderProps> = ({ 
-    activeTab, userName, userRole, onProfileClick,
+    activeTab, userName, userRole, userAvatar, onProfileClick,
     systemNotifications = [], onMarkAsRead, onMarkAllAsRead, toggleSidebar
 }) => {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -177,8 +178,8 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
               <span className="block text-sm font-semibold text-gray-900 leading-none">{userName}</span>
               <span className="block text-xs text-gray-500 font-medium mt-1">{userRole}</span>
             </div>
-            <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-white text-sm shadow-sm ${userRole === 'Admin' ? 'bg-gray-900' : 'bg-blue-600'}`}>
-              {userName.charAt(0)}
+            <div className={`w-9 h-9 overflow-hidden rounded-full flex items-center justify-center font-bold text-white text-sm shadow-sm ${userRole === 'Admin' ? 'bg-gray-900' : 'bg-blue-600'}`}>
+              {userAvatar ? <img src={userAvatar} alt="" className="h-full w-full object-cover" /> : (userName.trim().charAt(0).toUpperCase() || 'U')}
             </div>
         </button>
       </div>

@@ -109,6 +109,7 @@ const AdminDashboard: React.FC = () => {
       email: authenticatedUser.email,
       role: authenticatedUser.role as any,
       status: authenticatedUser.status || 'Actif',
+      avatar: authenticatedUser.avatar || null,
   } : localCurrentUser || {
       id: currentUserId || 1,
       name: userName,
@@ -167,6 +168,7 @@ const AdminDashboard: React.FC = () => {
         body: JSON.stringify({
           name: newUserData.name,
           email: newUserData.email,
+          avatar: newUserData.avatar ?? null,
           ...(password ? { currentPassword, password } : {}),
         }),
       }, token);
@@ -176,6 +178,7 @@ const AdminDashboard: React.FC = () => {
         if (response.status === 409) return 'Cette adresse e-mail est déjà utilisée par un autre compte.';
         if (response.status === 400 && /current password/i.test(payload.error || '')) return 'Le mot de passe actuel est incorrect.';
         if (response.status === 400 && /12 characters/i.test(payload.error || '')) return 'Le nouveau mot de passe doit contenir au moins 12 caractères.';
+        if (response.status === 400 && /profile photo/i.test(payload.error || '')) return 'La photo est invalide ou dépasse 320 Ko. Choisissez une autre image.';
         return payload.error || "La mise à jour du profil via l'API a échoué.";
       }
       if (!payload.user) return "Réponse invalide de l'API lors de la mise à jour du profil.";
@@ -215,7 +218,8 @@ const AdminDashboard: React.FC = () => {
         <AdminHeader 
             activeTab={activeTab} 
             userName={userName} 
-            userRole={userRole} 
+            userRole={userRole}
+            userAvatar={authenticatedUser?.avatar}
             onProfileClick={() => setIsProfileModalOpen(true)}
             systemNotifications={adminData.systemNotifications}
             onMarkAsRead={adminData.markNotificationAsRead}
